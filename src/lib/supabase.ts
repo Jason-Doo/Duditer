@@ -1,21 +1,18 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 export const createClient = () => {
-    // Vercel 배포 시 간혹 env가 늦게 주입되는 경우를 대비한 fallback
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || typeof window !== 'undefined' ? (window as any)?.__ENV?.NEXT_PUBLIC_SUPABASE_URL : '';
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || typeof window !== 'undefined' ? (window as any)?.__ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY : '';
+    // Vercel 환경에서 env 주입이 실패할 경우를 대비한 최후의 fallback 하드코딩
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://urikflimxxkeorhyfoku.supabase.co';
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyaWtmbGlteHhrZW9yaHlmb2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNzM2MzksImV4cCI6MjA4Nzg0OTYzOX0.twyolTg19YwW9k_8b2-PF7VVFc7LcQlxBEqSXAC5Jhg';
 
-    return createSupabaseClient(
-        url || process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        key || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    return createBrowserClient(url, key);
 }
 
-let _client: ReturnType<typeof createSupabaseClient> | null = null;
+let _client: ReturnType<typeof createBrowserClient> | null = null;
 
 function getClient() {
     if (typeof window === 'undefined') {
-        return {} as ReturnType<typeof createSupabaseClient>;
+        return {} as ReturnType<typeof createBrowserClient>;
     }
     if (!_client) {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
