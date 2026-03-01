@@ -21,7 +21,7 @@ function getClient() {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         console.log('[Supabase JS] init:', { hasUrl: !!url, hasKey: !!key });
-        _client = createClient();
+        _client = createClient() as any;
     }
     return _client;
 }
