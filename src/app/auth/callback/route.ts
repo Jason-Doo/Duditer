@@ -26,20 +26,23 @@ export async function GET(request: Request) {
                 key,
                 {
                     cookies: {
-                        get(name: string) {
-                            return cookieStore.get(name)?.value;
+                        getAll() {
+                            return cookieStore.getAll();
                         },
-                        set(name: string, value: string, options: CookieOptions) {
-                            // If not persisting, make auth cookies session-only
-                            if (!persist && name.startsWith('sb-')) {
-                                const { maxAge: _maxAge, expires: _expires, ...rest } = options;
-                                cookieStore.set({ name, value, ...rest });
-                            } else {
-                                cookieStore.set({ name, value, ...options });
+                        setAll(cookiesToSet) {
+                            try {
+                                cookiesToSet.forEach(({ name, value, options }) => {
+                                    // If not persisting, make auth cookies session-only
+                                    if (!persist && name.startsWith('sb-')) {
+                                        const { maxAge: _maxAge, expires: _expires, ...rest } = options;
+                                        cookieStore.set({ name, value, ...rest });
+                                    } else {
+                                        cookieStore.set({ name, value, ...options });
+                                    }
+                                });
+                            } catch (error) {
+                                // Ignored in route handlers, but required by method signature
                             }
-                        },
-                        remove(name: string, options: CookieOptions) {
-                            cookieStore.set({ name, value: '', ...options });
                         },
                     },
                 }
