@@ -1,36 +1,32 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-export const createClient = () =>
-    createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export const createClient = () => {
+    // Vercel 배포 시 간혹 env가 늦게 주입되는 경우를 대비한 fallback
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || typeof window !== 'undefined' ? (window as any)?.__ENV?.NEXT_PUBLIC_SUPABASE_URL : '';
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || typeof window !== 'undefined' ? (window as any)?.__ENV?.NEXT_PUBLIC_SUPABASE_ANON_KEY : '';
+
+    return createSupabaseClient(
+        url || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        key || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
+}
 
-let _client: ReturnType<typeof createBrowserClient> | null = null;
+let _client: ReturnType<typeof createSupabaseClient> | null = null;
 
 function getClient() {
     if (typeof window === 'undefined') {
-        return {} as ReturnType<typeof createBrowserClient>;
+        return {} as ReturnType<typeof createSupabaseClient>;
     }
     if (!_client) {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        // 진단용 로그 — 배포 후 브라우저 콘솔에서 확인
-        console.log('[Supabase] env check:', {
-            hasUrl: !!url,
-            hasKey: !!key,
-            urlPrefix: url?.substring(0, 20) ?? '(없음)',
-        });
-        if (!url || !key) {
-            console.error('[Supabase] NEXT_PUBLIC 환경변수가 번들에 포함되지 않았습니다!');
-            return {} as ReturnType<typeof createBrowserClient>;
-        }
-        _client = createBrowserClient(url, key);
+        console.log('[Supabase JS] init:', { hasUrl: !!url, hasKey: !!key });
+        _client = createClient();
     }
     return _client;
 }
 
-export const supabase = new Proxy({} as ReturnType<typeof createBrowserClient>, {
+export const supabase = new Proxy({} as any, {
     get(_, prop: string | symbol) {
         const client = getClient();
         const value = (client as any)[prop];
