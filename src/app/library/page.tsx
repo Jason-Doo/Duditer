@@ -53,7 +53,7 @@ export default function LibraryPage() {
                 }
                 const { data: libData } = await query.order('created_at', { ascending: false });
                 if (libData) {
-                    allItems = [...allItems, ...libData.map(item => ({
+                    allItems = [...allItems, ...libData.map((item: any) => ({
                         id: item.id,
                         type: item.type as LibraryTab,
                         url: item.url,
@@ -71,7 +71,7 @@ export default function LibraryPage() {
                     .select('*')
                     .order('created_at', { ascending: false });
                 if (charData) {
-                    allItems = [...allItems, ...charData.map(item => ({
+                    allItems = [...allItems, ...charData.map((item: any) => ({
                         id: item.id,
                         type: 'character' as LibraryTab,
                         url: item.front_view_url,
@@ -89,7 +89,7 @@ export default function LibraryPage() {
                     .select('*')
                     .order('created_at', { ascending: false });
                 if (fitData) {
-                    allItems = [...allItems, ...fitData.map(item => ({
+                    allItems = [...allItems, ...fitData.map((item: any) => ({
                         id: item.id,
                         type: 'fitting' as LibraryTab,
                         url: item.result_url || item.image_url,
