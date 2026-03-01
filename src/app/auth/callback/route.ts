@@ -13,9 +13,17 @@ export async function GET(request: Request) {
             const cookieStore = await cookies();
             const persist = cookieStore.get('sb-persist')?.value !== 'false'; // Default to true if not set
 
+            const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+            if (!url || !key) {
+                console.error('[Supabase SSR] Auth callback failed: Missing env vars');
+                return NextResponse.redirect(`${origin}/login?error=env_missing`);
+            }
+
             const supabase = createServerClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                url,
+                key,
                 {
                     cookies: {
                         get(name: string) {
