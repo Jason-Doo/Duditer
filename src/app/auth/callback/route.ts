@@ -13,8 +13,8 @@ export async function GET(request: Request) {
             const cookieStore = await cookies();
             const persist = cookieStore.get('sb-persist')?.value !== 'false'; // Default to true if not set
 
-            const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-            const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+            const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://urikflimxxkeorhyfoku.supabase.co';
+            const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyaWtmbGlteHhrZW9yaHlmb2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNzM2MzksImV4cCI6MjA4Nzg0OTYzOX0.twyolTg19YwW9k_8b2-PF7VVFc7LcQlxBEqSXAC5Jhg';
 
             if (!url || !key) {
                 console.error('[Supabase SSR] Auth callback failed: Missing env vars');
