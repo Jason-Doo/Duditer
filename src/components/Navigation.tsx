@@ -103,7 +103,6 @@ export default function Navigation() {
                     >
                         <LogOut size={24} />
                     </button>
-                    <div className={styles.sidebarProfile}></div>
                 </div>
             </aside>
 

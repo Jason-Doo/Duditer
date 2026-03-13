@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, Sparkles, ChevronRight, ChevronLeft, RotateCcw, CheckCircle2, Image as ImageIcon, Shirt, Plus, Trash2 } from 'lucide-react';
 import styles from '../../page.module.css';
 import { supabase } from '@/lib/supabase';
-
+import ModalLayout from '@/components/ModalLayout';
 interface FittingRoomProps {
     character: any;
     onClose: () => void;
@@ -342,437 +342,421 @@ export default function FittingRoom({ character, onClose, onDelete }: FittingRoo
         if (file) handleFileUpload(file);
     };
 
+    const titleContent = (step === 3 || step === 4) && selectedFitting
+        ? (selectedFitting.outfit_name || '피팅 결과')
+        : '피팅룸';
+
+    const headerLeftContent = (
+        <button
+            onClick={() => {
+                if (step !== 0) {
+                    setStep(0);
+                    setOutfitUrl(null);
+                    setOutfitPreview(null);
+                    setOutfitDescription('');
+                    setOutfitExclusion('');
+                    setOutfitName('');
+                    setSelectedFitting(null);
+                    setNeedsConfirm(false);
+                    setNeedsConfirmChar(false);
+                } else {
+                    onClose();
+                }
+            }}
+            style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-primary)',
+                padding: '0.5rem',
+                paddingLeft: 0,
+                transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+        >
+            <ChevronLeft size={28} />
+        </button>
+    );
+
+    const headerRightContent = step === 1 ? (
+        <button
+            className="gradient-btn"
+            style={{
+                padding: '0.8rem 1.5rem',
+                fontSize: '1rem',
+                height: 'auto',
+                opacity: canStartFitting ? 1 : 0.4,
+                cursor: canStartFitting ? 'pointer' : 'default',
+                pointerEvents: canStartFitting ? 'auto' : 'none'
+            }}
+            onClick={async () => {
+                const name = outfitName.trim();
+                const { data: existing } = await supabase
+                    .from('fittings')
+                    .select('id')
+                    .eq('character_id', character.id)
+                    .eq('outfit_name', name)
+                    .maybeSingle();
+                if (existing) {
+                    alert(`'${name}' 이름의 옷이 이미 등록되어 있습니다. 다른 이름을 입력해주세요.`);
+                    return;
+                }
+                setStep(2);
+            }}
+            disabled={!canStartFitting}
+        >
+            <Sparkles size={18} /> 피팅하기
+        </button>
+    ) : step === 0 ? (
+        <button
+            type="button"
+            className="gradient-btn"
+            style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto' }}
+            onClick={() => setStep(1)}
+        >
+            <Plus size={20} /> 피팅 추가
+        </button>
+    ) : null;
+
     return (
-        <div className={styles.modalOverlay} onClick={onClose}>
-            <motion.div
-                className={styles.modalContent}
-                onClick={e => e.stopPropagation()}
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                style={{ width: 'var(--modal-width, 95%)', maxWidth: '1100px', height: 'var(--modal-height, 85vh)', maxHeight: '900px' }}
-            >
-                <div className={styles.modalHeader} style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto 1fr',
-                    alignItems: 'center',
-                    borderBottom: '1px solid rgba(0,0,0,0.05)'
-                }}>
-                    <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        <button
-                            onClick={() => {
-                                if (step !== 0) {
-                                    setStep(0);
-                                    setOutfitUrl(null);
-                                    setOutfitPreview(null);
-                                    setOutfitDescription('');
-                                    setOutfitExclusion('');
-                                    setOutfitName('');
-                                    setSelectedFitting(null);
-                                    setNeedsConfirm(false); // Reset confirm state on back
-                                    setNeedsConfirmChar(false); // Reset char confirm on back
-                                } else {
-                                    onClose();
-                                }
-                            }}
+        <ModalLayout
+            onClose={onClose}
+            title={titleContent}
+            headerLeft={headerLeftContent}
+            headerRight={headerRightContent}
+            maxWidth="1100px" // To match the previous maxWidth manually set in FittingRoom
+        >
+            <AnimatePresence mode="wait">
+                {step === 0 && (
+                    <motion.div key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                        <div className={styles.grid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
+
+                            {/* History Cards */}
+                            {history.map(item => (
+                                <motion.div
+                                    key={item.id}
+                                    className={styles.mediaCard}
+                                    onClick={() => {
+                                        setSelectedFitting(item);
+                                        setResultUrl(item.result_url || item.image_url);
+                                        setStep(4);
+                                    }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    <div className={styles.mediaPlaceholder}>
+                                        <img src={item.result_url} alt="Fitting" />
+                                        <div className={styles.mediaInfo} style={{ padding: '0.6rem 1rem', bottom: 0, left: 0, right: 0, borderRadius: '0 0 16px 16px' }}>
+                                            <span style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {item.outfit_name || item.description || '피팅'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                        {history.length === 0 && (
+                            <div style={{ padding: '4rem', textAlign: 'center', color: '#ccc' }}>
+                                <ImageIcon size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                                <p>아직 피팅 기록이 없습니다. 첫 피팅을 추가해보세요!</p>
+                            </div>
+                        )}
+
+                        {/* Delete Character Button at the bottom */}
+                        <div style={{ marginTop: '3rem', paddingTop: '2.5rem', borderTop: '1.5px solid rgba(0,0,0,0.05)', textAlign: 'center', opacity: 0.8 }}>
+                            <button
+                                type="button"
+                                onClick={deleteCharacter}
+                                disabled={isDeletingChar}
+                                style={{
+                                    padding: '0.8rem 1.6rem',
+                                    borderRadius: '16px',
+                                    border: needsConfirmChar ? 'none' : '1px solid #efefef',
+                                    background: needsConfirmChar
+                                        ? 'linear-gradient(135deg, #ff4757, #ff6b81)'
+                                        : isDeletingChar ? '#f8f9fa' : 'none',
+                                    color: needsConfirmChar ? 'white' : 'var(--text-secondary)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 700,
+                                    cursor: isDeletingChar ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    margin: '0 auto',
+                                    transform: needsConfirmChar ? 'scale(1.05)' : 'scale(1)',
+                                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                                }}
+                            >
+                                {isDeletingChar ? (
+                                    <RotateCcw className="spin" size={16} />
+                                ) : (
+                                    <Trash2 size={16} />
+                                )}
+                                {isDeletingChar ? '캐릭터 삭제 중...' : needsConfirmChar ? '정말 캐릭터를 삭제할까요?' : '캐릭터 삭제'}
+                            </button>
+                            {needsConfirmChar && (
+                                <p style={{ fontSize: '0.78rem', color: 'var(--accent-pink)', marginTop: '0.8rem', fontWeight: 600, animation: 'pulse 1.5s infinite ease-in-out' }}>
+                                    * 피팅 히스토리 및 이미지가 모두 함께 삭제됩니다.
+                                </p>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+
+                {step === 1 && (
+                    <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} style={{ maxWidth: '700px', margin: '0 auto' }}>
+                        {/* 옷 이름 입력 (필수) - 업로드창 위 */}
+                        <input
+                            type="text"
+                            value={outfitName}
+                            onChange={e => setOutfitName(e.target.value)}
+                            placeholder="복장 이름을 입력하세요."
                             style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
+                                width: '100%',
+                                marginBottom: '0.5rem',
+                                padding: '0.9rem 1.2rem',
+                                borderRadius: '16px',
+                                border: `1.5px solid ${outfitName.trim() ? 'var(--border-color)' : 'rgba(244,91,126,0.5)'}`,
+                                fontSize: '0.95rem',
+                                fontFamily: 'inherit',
+                                outline: 'none',
+                                transition: 'border-color 0.2s',
+                                background: 'var(--bg-secondary)'
+                            }}
+                            onFocus={e => e.target.style.borderColor = 'var(--accent-primary)'}
+                            onBlur={e => (e.target.style.borderColor = outfitName.trim() ? 'var(--border-color)' : 'rgba(244,91,126,0.5)')}
+                        />
+                        {!outfitName.trim() && (
+                            <p style={{ fontSize: '0.8rem', color: 'var(--accent-pink)', marginBottom: '0.8rem', paddingLeft: '0.4rem' }}>옷 이름은 필수입니다.</p>
+                        )}
+                        <div
+                            className={`${styles.uploadDropzone} ${isDragging ? styles.dragging : ''}`}
+                            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={onDrop}
+                            onClick={() => !outfitPreview && document.getElementById('outfitInput')?.click()}
+                            style={{ height: '320px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: outfitPreview ? 'default' : 'pointer', borderRadius: '24px', position: 'relative', overflow: 'hidden' }}
+                        >
+                            {uploading ? (
+                                <RotateCcw className="spin" size={48} color="var(--accent-primary)" />
+                            ) : outfitPreview ? (
+                                <>
+                                    <img src={outfitPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setOutfitPreview(null); setOutfitUrl(null); document.getElementById('outfitInput')?.click(); }}
+                                        style={{ position: 'absolute', top: '0.8rem', right: '0.8rem', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '8px', color: 'white', padding: '0.3rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
+                                    >교체</button>
+                                </>
+                            ) : (
+                                <>
+                                    <Shirt size={64} color={isDragging ? 'var(--accent-primary)' : '#ddd'} />
+                                    <p style={{ marginTop: '1.5rem', fontWeight: 700 }} className={styles.desktopOnly}>이미지를 드래그하거나 클릭하여 업로드</p>
+                                    <p style={{ marginTop: '1.5rem', fontWeight: 700 }} className={styles.mobileOnly}>눌러서 이미지를 업로드</p>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>상의, 하의, 원피스 등 무엇이든 좋아요</p>
+                                </>
+                            )}
+                            <input id="outfitInput" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])} />
+                        </div>
+                        <textarea
+                            value={outfitDescription}
+                            onChange={e => setOutfitDescription(e.target.value)}
+                            placeholder="복장 설명을 입력하세요. (예: 흰색 린넨 셔츠에 베이지 슬랙스)"
+                            style={{
+                                width: '100%',
+                                marginTop: '1.2rem',
+                                padding: '1rem 1.2rem',
+                                borderRadius: '16px',
+                                border: '1.5px solid var(--border-color)',
+                                fontSize: '0.95rem',
+                                fontFamily: 'inherit',
+                                resize: 'vertical',
+                                minHeight: '90px',
+                                outline: 'none',
+                                transition: 'border-color 0.2s',
+                                background: 'var(--bg-secondary)'
+                            }}
+                            onFocus={e => e.target.style.borderColor = 'var(--accent-primary)'}
+                            onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+                        />
+                        <textarea
+                            value={outfitExclusion}
+                            onChange={e => setOutfitExclusion(e.target.value)}
+                            placeholder="이미지에서 제외해야 하는 요소를 입력하세요. (예: 신발, 가방, 마스크)"
+                            style={{
+                                width: '100%',
+                                marginTop: '1.2rem',
+                                padding: '1rem 1.2rem',
+                                borderRadius: '16px',
+                                border: '1.5px solid var(--border-color)',
+                                fontSize: '0.95rem',
+                                fontFamily: 'inherit',
+                                resize: 'vertical',
+                                minHeight: '90px',
+                                outline: 'none',
+                                transition: 'border-color 0.2s',
+                                background: 'var(--bg-secondary)'
+                            }}
+                            onFocus={e => e.target.style.borderColor = 'var(--accent-primary)'}
+                            onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
+                        />
+                    </motion.div>
+                )}
+
+                {step === 2 && (
+                    <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+                        <div className="card" style={{ aspectRatio: '1/1', background: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible', marginBottom: '1.5rem', borderRadius: '32px' }}>
+                            {loading ? (
+                                <div style={{ textAlign: 'center', padding: '2rem', width: '100%' }}>
+                                    <Sparkles className="spin" size={64} color="var(--accent-primary)" />
+                                    <div style={{ marginTop: '1.5rem', minHeight: '2rem' }}>
+                                        <AnimatePresence mode="wait">
+                                            <motion.p
+                                                key={loadingMsgIdx}
+                                                initial={{ y: 16, opacity: 0 }}
+                                                animate={{ y: 0, opacity: 1 }}
+                                                exit={{ y: -16, opacity: 0 }}
+                                                transition={{ duration: 0.35 }}
+                                                style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--accent-primary)', whiteSpace: 'nowrap' }}
+                                            >
+                                                {FITTING_LOADING_MESSAGES[loadingMsgIdx]}
+                                            </motion.p>
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            ) : resultUrl ? (
+                                <img src={resultUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Fitting Result" />
+                            ) : null}
+                        </div>
+                    </motion.div>
+                )}
+
+                {step === 3 && (
+                    <motion.div key="step3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+                        <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '1.5rem' }}>따끈따끈한 새 옷을 입었어요!</h3>
+                        <div className="card" style={{ aspectRatio: '1/1', background: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: '2rem', borderRadius: '32px' }}>
+                            <img src={resultUrl!} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Fitting Result" />
+                        </div>
+
+                        {/* New Delete Button below image for Step 3 */}
+                        <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={(e) => deleteFitting(e)}
+                                disabled={isDeleting}
+                                style={{
+                                    padding: '0.8rem 1.6rem',
+                                    borderRadius: '16px',
+                                    border: needsConfirm ? 'none' : '1px solid #efefef',
+                                    background: needsConfirm
+                                        ? 'linear-gradient(135deg, #ff4757, #ff6b81)'
+                                        : isDeleting ? '#f8f9fa' : 'none',
+                                    color: needsConfirm ? 'white' : 'var(--text-secondary)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 700,
+                                    cursor: isDeleting ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    margin: '0 auto',
+                                    transform: needsConfirm ? 'scale(1.05)' : 'scale(1)',
+                                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                                }}
+                            >
+                                {isDeleting ? (
+                                    <RotateCcw className="spin" size={16} />
+                                ) : (
+                                    <Trash2 size={16} />
+                                )}
+                                {isDeleting ? '삭제 중...' : needsConfirm ? '삭제할까요?' : '삭제'}
+                            </button>
+                            {needsConfirm && (
+                                <p style={{ fontSize: '0.78rem', color: 'var(--accent-pink)', marginTop: '0.8rem', fontWeight: 600, animation: 'pulse 1.5s infinite ease-in-out' }}>
+                                    * 이 피팅 기록이 삭제됩니다.
+                                </p>
+                            )}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <button className={styles.outlineBtn} onClick={() => setStep(0)}>다른 기록 보기</button>
+                            <button className="gradient-btn" onClick={() => setStep(1)}>새 옷 더 입히기</button>
+                        </div>
+                    </motion.div>
+                )}
+
+                {step === 4 && selectedFitting && (
+                    <motion.div
+                        key="step4"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        style={{
+                            maxWidth: '600px',
+                            margin: '0 auto',
+                            textAlign: 'center',
+                            width: '100%'
+                        }}
+                    >
+                        <div
+                            className={styles.mobileFullWidthImg} // Custom class for mobile full width
+                            style={{
+                                aspectRatio: '1/1',
+                                background: '#f8f9fa',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: 'var(--text-primary)',
-                                padding: '0.5rem',
-                                paddingLeft: 0,
-                                transition: 'opacity 0.2s'
+                                overflow: 'hidden',
+                                borderRadius: '32px',
+                                width: '100%'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
-                            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                         >
-                            <ChevronLeft size={28} />
-                        </button>
-                    </div>
+                            <img src={resultUrl!} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt={selectedFitting.outfit_name} />
+                        </div>
 
-                    <div style={{ textAlign: 'center' }}>
-                        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>
-                            {(step === 3 || step === 4) && selectedFitting
-                                ? (selectedFitting.outfit_name || '피팅 결과')
-                                : '피팅룸'}
-                        </h2>
-                    </div>
-
-                    <div style={{ justifySelf: 'end' }}>
-                        {step === 1 ? (
-                            <button
-                                className="gradient-btn"
-                                style={{
-                                    padding: '0.8rem 1.5rem',
-                                    fontSize: '1rem',
-                                    height: 'auto',
-                                    opacity: canStartFitting ? 1 : 0.4,
-                                    cursor: canStartFitting ? 'pointer' : 'default',
-                                    pointerEvents: canStartFitting ? 'auto' : 'none'
-                                }}
-                                onClick={async () => {
-                                    const name = outfitName.trim();
-                                    // Duplicate name check
-                                    const { data: existing } = await supabase
-                                        .from('fittings')
-                                        .select('id')
-                                        .eq('character_id', character.id)
-                                        .eq('outfit_name', name)
-                                        .maybeSingle();
-                                    if (existing) {
-                                        alert(`'${name}' 이름의 옷이 이미 등록되어 있습니다. 다른 이름을 입력해주세요.`);
-                                        return;
-                                    }
-                                    setStep(2);
-                                }}
-                                disabled={!canStartFitting}
-                            >
-                                <Sparkles size={18} /> 피팅하기
-                            </button>
-                        ) : step === 0 ? (
+                        {/* New Delete Button below image for Step 4 */}
+                        <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
                             <button
                                 type="button"
-                                className="gradient-btn"
-                                style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto' }}
-                                onClick={() => setStep(1)}
-                            >
-                                <Plus size={20} /> 피팅 추가
-                            </button>
-                        ) : null}
-                    </div>
-                </div>
-
-                <div className={styles.modalBody} style={{ padding: '2.5rem', overflowY: 'auto' }}>
-                    <AnimatePresence mode="wait">
-                        {step === 0 && (
-                            <motion.div key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                                <div className={styles.grid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
-
-                                    {/* History Cards */}
-                                    {history.map(item => (
-                                        <motion.div
-                                            key={item.id}
-                                            className={styles.mediaCard}
-                                            onClick={() => {
-                                                setSelectedFitting(item);
-                                                setResultUrl(item.result_url || item.image_url);
-                                                setStep(4);
-                                            }}
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                        >
-                                            <div className={styles.mediaPlaceholder}>
-                                                <img src={item.result_url} alt="Fitting" />
-                                                <div className={styles.mediaInfo} style={{ padding: '0.6rem 1rem', bottom: 0, left: 0, right: 0, borderRadius: '0 0 16px 16px' }}>
-                                                    <span style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {item.outfit_name || item.description || '피팅'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                                {history.length === 0 && (
-                                    <div style={{ padding: '4rem', textAlign: 'center', color: '#ccc' }}>
-                                        <ImageIcon size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                                        <p>아직 피팅 기록이 없습니다. 첫 피팅을 추가해보세요!</p>
-                                    </div>
-                                )}
-
-                                {/* Delete Character Button at the bottom */}
-                                <div style={{ marginTop: '3rem', paddingTop: '2.5rem', borderTop: '1.5px solid rgba(0,0,0,0.05)', textAlign: 'center', opacity: 0.8 }}>
-                                    <button
-                                        type="button"
-                                        onClick={deleteCharacter}
-                                        disabled={isDeletingChar}
-                                        style={{
-                                            padding: '0.8rem 1.6rem',
-                                            borderRadius: '16px',
-                                            border: needsConfirmChar ? 'none' : '1px solid #efefef',
-                                            background: needsConfirmChar
-                                                ? 'linear-gradient(135deg, #ff4757, #ff6b81)'
-                                                : isDeletingChar ? '#f8f9fa' : 'none',
-                                            color: needsConfirmChar ? 'white' : 'var(--text-secondary)',
-                                            fontSize: '0.9rem',
-                                            fontWeight: 700,
-                                            cursor: isDeletingChar ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.5rem',
-                                            margin: '0 auto',
-                                            transform: needsConfirmChar ? 'scale(1.05)' : 'scale(1)',
-                                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                                        }}
-                                    >
-                                        {isDeletingChar ? (
-                                            <RotateCcw className="spin" size={16} />
-                                        ) : (
-                                            <Trash2 size={16} />
-                                        )}
-                                        {isDeletingChar ? '캐릭터 삭제 중...' : needsConfirmChar ? '정말 캐릭터를 삭제할까요?' : '캐릭터 삭제'}
-                                    </button>
-                                    {needsConfirmChar && (
-                                        <p style={{ fontSize: '0.78rem', color: 'var(--accent-pink)', marginTop: '0.8rem', fontWeight: 600, animation: 'pulse 1.5s infinite ease-in-out' }}>
-                                            * 피팅 히스토리 및 이미지가 모두 함께 삭제됩니다.
-                                        </p>
-                                    )}
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {step === 1 && (
-                            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} style={{ maxWidth: '700px', margin: '0 auto' }}>
-                                {/* 옷 이름 입력 (필수) - 업로드창 위 */}
-                                <input
-                                    type="text"
-                                    value={outfitName}
-                                    onChange={e => setOutfitName(e.target.value)}
-                                    placeholder="복장 이름을 입력하세요."
-                                    style={{
-                                        width: '100%',
-                                        marginBottom: '0.5rem',
-                                        padding: '0.9rem 1.2rem',
-                                        borderRadius: '16px',
-                                        border: `1.5px solid ${outfitName.trim() ? 'var(--border-color)' : 'rgba(244,91,126,0.5)'}`,
-                                        fontSize: '0.95rem',
-                                        fontFamily: 'inherit',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s',
-                                        background: 'var(--bg-secondary)'
-                                    }}
-                                    onFocus={e => e.target.style.borderColor = 'var(--accent-primary)'}
-                                    onBlur={e => (e.target.style.borderColor = outfitName.trim() ? 'var(--border-color)' : 'rgba(244,91,126,0.5)')}
-                                />
-                                {!outfitName.trim() && (
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--accent-pink)', marginBottom: '0.8rem', paddingLeft: '0.4rem' }}>옷 이름은 필수입니다.</p>
-                                )}
-                                <div
-                                    className={`${styles.uploadDropzone} ${isDragging ? styles.dragging : ''}`}
-                                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                                    onDragLeave={() => setIsDragging(false)}
-                                    onDrop={onDrop}
-                                    onClick={() => !outfitPreview && document.getElementById('outfitInput')?.click()}
-                                    style={{ height: '320px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: outfitPreview ? 'default' : 'pointer', borderRadius: '24px', position: 'relative', overflow: 'hidden' }}
-                                >
-                                    {uploading ? (
-                                        <RotateCcw className="spin" size={48} color="var(--accent-primary)" />
-                                    ) : outfitPreview ? (
-                                        <>
-                                            <img src={outfitPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setOutfitPreview(null); setOutfitUrl(null); document.getElementById('outfitInput')?.click(); }}
-                                                style={{ position: 'absolute', top: '0.8rem', right: '0.8rem', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '8px', color: 'white', padding: '0.3rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
-                                            >교체</button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Shirt size={64} color={isDragging ? 'var(--accent-primary)' : '#ddd'} />
-                                            <p style={{ marginTop: '1.5rem', fontWeight: 700 }} className={styles.desktopOnly}>이미지를 드래그하거나 클릭하여 업로드</p>
-                                            <p style={{ marginTop: '1.5rem', fontWeight: 700 }} className={styles.mobileOnly}>눌러서 이미지를 업로드</p>
-                                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>상의, 하의, 원피스 등 무엇이든 좋아요</p>
-                                        </>
-                                    )}
-                                    <input id="outfitInput" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])} />
-                                </div>
-                                <textarea
-                                    value={outfitDescription}
-                                    onChange={e => setOutfitDescription(e.target.value)}
-                                    placeholder="복장 설명을 입력하세요. (예: 흰색 린넨 셔츠에 베이지 슬랙스)"
-                                    style={{
-                                        width: '100%',
-                                        marginTop: '1.2rem',
-                                        padding: '1rem 1.2rem',
-                                        borderRadius: '16px',
-                                        border: '1.5px solid var(--border-color)',
-                                        fontSize: '0.95rem',
-                                        fontFamily: 'inherit',
-                                        resize: 'vertical',
-                                        minHeight: '90px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s',
-                                        background: 'var(--bg-secondary)'
-                                    }}
-                                    onFocus={e => e.target.style.borderColor = 'var(--accent-primary)'}
-                                    onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
-                                />
-                                <textarea
-                                    value={outfitExclusion}
-                                    onChange={e => setOutfitExclusion(e.target.value)}
-                                    placeholder="이미지에서 제외해야 하는 요소를 입력하세요. (예: 신발, 가방, 마스크)"
-                                    style={{
-                                        width: '100%',
-                                        marginTop: '1.2rem',
-                                        padding: '1rem 1.2rem',
-                                        borderRadius: '16px',
-                                        border: '1.5px solid var(--border-color)',
-                                        fontSize: '0.95rem',
-                                        fontFamily: 'inherit',
-                                        resize: 'vertical',
-                                        minHeight: '90px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s',
-                                        background: 'var(--bg-secondary)'
-                                    }}
-                                    onFocus={e => e.target.style.borderColor = 'var(--accent-primary)'}
-                                    onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
-                                />
-                            </motion.div>
-                        )}
-
-                        {step === 2 && (
-                            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-                                <div className="card" style={{ aspectRatio: '1/1', background: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible', marginBottom: '1.5rem', borderRadius: '32px' }}>
-                                    {loading ? (
-                                        <div style={{ textAlign: 'center', padding: '2rem', width: '100%' }}>
-                                            <Sparkles className="spin" size={64} color="var(--accent-primary)" />
-                                            <div style={{ marginTop: '1.5rem', minHeight: '2rem' }}>
-                                                <AnimatePresence mode="wait">
-                                                    <motion.p
-                                                        key={loadingMsgIdx}
-                                                        initial={{ y: 16, opacity: 0 }}
-                                                        animate={{ y: 0, opacity: 1 }}
-                                                        exit={{ y: -16, opacity: 0 }}
-                                                        transition={{ duration: 0.35 }}
-                                                        style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--accent-primary)', whiteSpace: 'nowrap' }}
-                                                    >
-                                                        {FITTING_LOADING_MESSAGES[loadingMsgIdx]}
-                                                    </motion.p>
-                                                </AnimatePresence>
-                                            </div>
-                                        </div>
-                                    ) : resultUrl ? (
-                                        <img src={resultUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Fitting Result" />
-                                    ) : null}
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {step === 3 && (
-                            <motion.div key="step3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-                                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '1.5rem' }}>따끈따끈한 새 옷을 입었어요!</h3>
-                                <div className="card" style={{ aspectRatio: '1/1', background: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: '2rem', borderRadius: '32px' }}>
-                                    <img src={resultUrl!} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Fitting Result" />
-                                </div>
-
-                                {/* New Delete Button below image for Step 3 */}
-                                <div style={{ marginBottom: '2.5rem', textAlign: 'center' }}>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => deleteFitting(e)}
-                                        disabled={isDeleting}
-                                        style={{
-                                            padding: '0.8rem 1.6rem',
-                                            borderRadius: '16px',
-                                            border: needsConfirm ? 'none' : '1px solid #efefef',
-                                            background: needsConfirm
-                                                ? 'linear-gradient(135deg, #ff4757, #ff6b81)'
-                                                : isDeleting ? '#f8f9fa' : 'none',
-                                            color: needsConfirm ? 'white' : 'var(--text-secondary)',
-                                            fontSize: '0.9rem',
-                                            fontWeight: 700,
-                                            cursor: isDeleting ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.5rem',
-                                            margin: '0 auto',
-                                            transform: needsConfirm ? 'scale(1.05)' : 'scale(1)',
-                                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                                        }}
-                                    >
-                                        {isDeleting ? (
-                                            <RotateCcw className="spin" size={16} />
-                                        ) : (
-                                            <Trash2 size={16} />
-                                        )}
-                                        {isDeleting ? '삭제 중...' : needsConfirm ? '삭제할까요?' : '삭제'}
-                                    </button>
-                                    {needsConfirm && (
-                                        <p style={{ fontSize: '0.78rem', color: 'var(--accent-pink)', marginTop: '0.8rem', fontWeight: 600, animation: 'pulse 1.5s infinite ease-in-out' }}>
-                                            * 이 피팅 기록이 삭제됩니다.
-                                        </p>
-                                    )}
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                    <button className={styles.outlineBtn} onClick={() => setStep(0)}>다른 기록 보기</button>
-                                    <button className="gradient-btn" onClick={() => setStep(1)}>새 옷 더 입히기</button>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {step === 4 && selectedFitting && (
-                            <motion.div
-                                key="step4"
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
+                                onClick={(e) => deleteFitting(e)}
+                                disabled={isDeleting}
                                 style={{
-                                    maxWidth: '600px',
+                                    padding: '0.8rem 1.6rem',
+                                    borderRadius: '16px',
+                                    border: needsConfirm ? 'none' : '1px solid #efefef',
+                                    background: needsConfirm
+                                        ? 'linear-gradient(135deg, #ff4757, #ff6b81)'
+                                        : isDeleting ? '#f8f9fa' : 'none',
+                                    color: needsConfirm ? 'white' : 'var(--text-secondary)',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 700,
+                                    cursor: isDeleting ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
                                     margin: '0 auto',
-                                    textAlign: 'center',
-                                    width: '100%'
+                                    transform: needsConfirm ? 'scale(1.05)' : 'scale(1)',
+                                    transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                                 }}
                             >
-                                <div
-                                    className={styles.mobileFullWidthImg} // Custom class for mobile full width
-                                    style={{
-                                        aspectRatio: '1/1',
-                                        background: '#f8f9fa',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        overflow: 'hidden',
-                                        borderRadius: '32px',
-                                        width: '100%'
-                                    }}
-                                >
-                                    <img src={resultUrl!} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt={selectedFitting.outfit_name} />
-                                </div>
+                                {isDeleting ? (
+                                    <RotateCcw className="spin" size={16} />
+                                ) : (
+                                    <Trash2 size={16} />
+                                )}
+                                {isDeleting ? '삭제 중...' : needsConfirm ? '삭제할까요?' : '삭제'}
+                            </button>
+                            {needsConfirm && (
+                                <p style={{ fontSize: '0.78rem', color: 'var(--accent-pink)', marginTop: '0.8rem', fontWeight: 600, animation: 'pulse 1.5s infinite ease-in-out' }}>
+                                    * 이 피팅 기록이 삭제됩니다.
+                                </p>
+                            )}
+                        </div>
 
-                                {/* New Delete Button below image for Step 4 */}
-                                <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => deleteFitting(e)}
-                                        disabled={isDeleting}
-                                        style={{
-                                            padding: '0.8rem 1.6rem',
-                                            borderRadius: '16px',
-                                            border: needsConfirm ? 'none' : '1px solid #efefef',
-                                            background: needsConfirm
-                                                ? 'linear-gradient(135deg, #ff4757, #ff6b81)'
-                                                : isDeleting ? '#f8f9fa' : 'none',
-                                            color: needsConfirm ? 'white' : 'var(--text-secondary)',
-                                            fontSize: '0.9rem',
-                                            fontWeight: 700,
-                                            cursor: isDeleting ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '0.5rem',
-                                            margin: '0 auto',
-                                            transform: needsConfirm ? 'scale(1.05)' : 'scale(1)',
-                                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                                        }}
-                                    >
-                                        {isDeleting ? (
-                                            <RotateCcw className="spin" size={16} />
-                                        ) : (
-                                            <Trash2 size={16} />
-                                        )}
-                                        {isDeleting ? '삭제 중...' : needsConfirm ? '삭제할까요?' : '삭제'}
-                                    </button>
-                                    {needsConfirm && (
-                                        <p style={{ fontSize: '0.78rem', color: 'var(--accent-pink)', marginTop: '0.8rem', fontWeight: 600, animation: 'pulse 1.5s infinite ease-in-out' }}>
-                                            * 이 피팅 기록이 삭제됩니다.
-                                        </p>
-                                    )}
-                                </div>
-
-                                <style jsx>{`
+                        <style jsx>{`
                                     @media (max-width: 768px) {
                                         div.${styles.mobileFullWidthImg} {
                                             border-radius: 0 !important;
@@ -791,11 +775,9 @@ export default function FittingRoom({ character, onClose, onDelete }: FittingRoo
                                         }
                                     }
                                 `}</style>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-            </motion.div>
-        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </ModalLayout>
     );
 }

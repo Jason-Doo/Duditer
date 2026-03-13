@@ -14,9 +14,9 @@ const PROMPTS: { key: string; label: string; defaultValue: string }[] = [
     { key: 'character_side_prompt', label: '캐릭터 측면 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.character_side_prompt },
     { key: 'character_side_single_prompt', label: '캐릭터 측면 개별 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.character_side_single_prompt },
     { key: 'fitting_system_prompt', label: '피팅 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.fitting_system_prompt },
-    { key: 'scenario_idea_prompt', label: '시나리오 아이디어 프롬프트', defaultValue: DEFAULT_PROMPTS.scenario_idea_prompt },
-    { key: 'scenario_create_prompt', label: '시나리오 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.scenario_create_prompt },
-    { key: 'scene_create_prompt', label: '장면 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.scene_create_prompt },
+    { key: 'scenario_random_subject_prompt', label: '랜덤 주제 선정 프롬프트', defaultValue: DEFAULT_PROMPTS.scenario_random_subject_prompt },
+    { key: 'scenario_write_prompt', label: '시나리오 작성 프롬프트', defaultValue: DEFAULT_PROMPTS.scenario_write_prompt },
+    { key: 'scenario_scene_generate_prompt', label: '씬 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.scenario_scene_generate_prompt },
     { key: 'video_create_prompt', label: '영상 생성 프롬프트', defaultValue: DEFAULT_PROMPTS.video_create_prompt },
 ];
 

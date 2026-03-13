@@ -9,16 +9,14 @@ import { ArrowLeft, Clapperboard, ImageIcon, PlayCircle, Plus } from 'lucide-rea
 import Link from 'next/link';
 
 import SceneDetailModal from '../components/SceneDetailModal';
-import ScenarioWizard from '../components/ScenarioWizard';
 
 export default function ProjectEditLayout() {
     const params = useParams();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'scenario' | 'scenes' | 'video'>('scenes');
+    const [activeTab, setActiveTab] = useState<'scenario' | 'scenes' | 'video'>('scenario');
     const [project, setProject] = useState<any>(null);
     const [selectedScene, setSelectedScene] = useState<any>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isWizardOpen, setIsWizardOpen] = useState(false);
 
     useEffect(() => {
         if (params.id) {
@@ -86,7 +84,7 @@ export default function ProjectEditLayout() {
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                         style={{ width: '100%' }}
                     >
-                        {activeTab === 'scenario' && <ScenarioTab projectId={params.id as string} onOpenWizard={() => setIsWizardOpen(true)} />}
+                        {activeTab === 'scenario' && <ScenarioTab projectId={params.id as string} />}
                         {activeTab === 'scenes' && <ScenesTab projectId={params.id as string} onOpenScene={handleOpenModal} />}
                         {activeTab === 'video' && <VideoTab projectId={params.id as string} />}
                     </motion.div>
@@ -107,25 +105,20 @@ export default function ProjectEditLayout() {
                         }}
                     />
                 )}
-                {isWizardOpen && (
-                    <ScenarioWizard
-                        key="scenario-wizard-modal"
-                        projectId={params.id as string}
-                        onClose={() => setIsWizardOpen(false)}
-                        onComplete={() => {
-                            setIsWizardOpen(false);
-                            // Can trigger further notification
-                        }}
-                    />
-                )}
             </AnimatePresence>
         </main>
     );
 }
 
-// Sub-components
-function ScenarioTab({ projectId, onOpenWizard }: { projectId: string; onOpenWizard: () => void }) {
-    const [scenario, setScenario] = useState<any>(null);
+import { Sparkles, Dice5, Wand2 } from 'lucide-react';
+
+function ScenarioTab({ projectId }: { projectId: string }) {
+    const [subject, setSubject] = useState('');
+    const [description, setDescription] = useState('');
+    const [sceneCount, setSceneCount] = useState<number>(10);
+    const [scenes, setScenes] = useState<any[]>([]);
+    const [loadingAI, setLoadingAI] = useState(false);
+    const [loadingScenes, setLoadingScenes] = useState(false);
 
     useEffect(() => {
         fetchScenario();
@@ -133,30 +126,173 @@ function ScenarioTab({ projectId, onOpenWizard }: { projectId: string; onOpenWiz
 
     async function fetchScenario() {
         const { data } = await supabase.from('scenarios').select('*').eq('project_id', projectId).single();
-        if (data) setScenario(data);
+        if (data && data.content) {
+            setScenes(data.content);
+            // Optionally set subject/description if they were saved in the db separately
+        }
     }
 
+    const handleRandomSubject = () => {
+        const subjects = [
+            '우주 정거장에서의 평화로운 하루',
+            '비밀의 숲에서 길을 잃은 여행객',
+            '과거로 돌아간 회사원의 좌충우돌 적응기',
+            '인공지능 로봇과의 우정',
+            '마법 학교 입학 첫날의 소동'
+        ];
+        setSubject(subjects[Math.floor(Math.random() * subjects.length)]);
+    };
+
+    const handleAIWrite = async () => {
+        if (!subject) return alert('주제를 먼저 입력해주세요.');
+        setLoadingAI(true);
+        // Mock AI writing
+        setTimeout(() => {
+            setDescription(`${subject}에 대한 시나리오입니다.\n도입: 평화로운 일상 속에 찾아온 작은 변화를 보여줍니다.\n전개: 주인공이 겪는 뜻밖의 만남과 갈등을 통해 긴장감을 높입니다.\n결말: 갈등이 해소되며 감동적인 여운을 남기고 마무리됩니다.`);
+            setLoadingAI(false);
+        }, 1500);
+    };
+
+    const handleGenerateScenes = async () => {
+        if (!description) return alert('시나리오 설명을 먼저 작성해주세요.');
+        setLoadingScenes(true);
+        // Mock Scene Generation based on sceneCount
+        setTimeout(() => {
+            const newScenes = Array.from({ length: sceneCount }).map((_, idx) => ({
+                id: Date.now() + idx,
+                time: `${idx * 5}-${(idx + 1) * 5}초`,
+                content: `장면 ${idx + 1}: ${subject} 관련 사건 전개...`
+            }));
+            setScenes(newScenes);
+            setLoadingScenes(false);
+
+            // Auto save to Supabase
+            saveScenarioToDB(newScenes);
+        }, 1500);
+    };
+
+    const saveScenarioToDB = async (contentToSave: any[]) => {
+        await supabase
+            .from('scenarios')
+            .upsert({
+                project_id: projectId,
+                content: contentToSave,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'project_id' });
+    };
+
+    const updateSceneContent = (index: number, newContent: string) => {
+        const updatedScenes = [...scenes];
+        updatedScenes[index].content = newContent;
+        setScenes(updatedScenes);
+        saveScenarioToDB(updatedScenes);
+    };
+
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {!scenario ? (
-                <div className="card" style={{ padding: '3rem', textAlign: 'center' }}>
-                    <h3 style={{ marginBottom: '1rem' }}>시나리오 마법사</h3>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>주제를 선정하여 5초 단위 스토리보드를 구성해보세요.</p>
-                    <button className="gradient-btn" onClick={onOpenWizard}>시나리오 마법사 시작</button>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3>확정된 시나리오</h3>
-                        <button className={styles.tag} onClick={onOpenWizard}>다시 작성하기</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+                {/* 1. 주제 입력 영역 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <label style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-secondary)' }}>주제</label>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                        <input
+                            type="text"
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                            placeholder="시나리오 주제를 입력하세요..."
+                            className={styles.textInput}
+                            style={{ flex: 1, padding: '0.9rem 1.25rem' }}
+                        />
+                        <button className={styles.outlineBtn} onClick={handleRandomSubject} style={{ whiteSpace: 'nowrap' }}>
+                            <Dice5 size={18} /> 랜덤 주제 선정
+                        </button>
                     </div>
-                    {scenario.content.map((item: any, idx: number) => (
-                        <div key={idx} className="card" style={{ padding: '1.25rem' }}>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--accent-primary)' }}>{item.time}</span>
-                            <p style={{ fontWeight: 700, margin: '0.25rem 0' }}>{item.description}</p>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>초안: {item.visual}</p>
-                        </div>
-                    ))}
+                </div>
+
+                {/* 2. 시나리오 설명 영역 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-secondary)' }}>시나리오 설명</label>
+                        <button className="gradient-btn" onClick={handleAIWrite} disabled={loadingAI || !subject} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                            {loadingAI ? '생성 중...' : 'AI 시나리오 작성'} <Sparkles size={14} />
+                        </button>
+                    </div>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="시나리오에 대한 상세 설명을 작성해주세요..."
+                        className={styles.textInput}
+                        style={{ minHeight: '150px', resize: 'vertical' }}
+                    />
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+
+                {/* 3. 씬 자동생성 영역 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>생성할 씬 수</span>
+                        <input
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={sceneCount}
+                            onChange={(e) => setSceneCount(Number(e.target.value))}
+                            className={styles.textInput}
+                            style={{ width: '80px', padding: '0.5rem', textAlign: 'center' }}
+                        />
+                    </div>
+                    <button className="gradient-btn" onClick={handleGenerateScenes} disabled={loadingScenes || !description} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {loadingScenes ? '씬 생성 중...' : '씬 자동생성'} <Wand2 size={16} />
+                    </button>
+                </div>
+            </div>
+
+            {/* 4. 생성된 씬 리스트 영역 */}
+            {scenes.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '0.5rem' }}>생성된 씬 목록 ({scenes.length}개)</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {scenes.map((scene, idx) => (
+                            <div key={scene.id} className="card" style={{ display: 'flex', background: '#fff', border: '1px solid var(--border-color)', padding: 0, overflow: 'hidden' }}>
+                                {/* 좌측 시간 영역 */}
+                                <div style={{
+                                    width: '100px',
+                                    background: 'rgba(109, 93, 252, 0.04)',
+                                    borderRight: '1px solid var(--border-color)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                }}>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', marginBottom: '0.2rem' }}>SCENE {idx + 1}</div>
+                                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{scene.time}</div>
+                                    </div>
+                                </div>
+
+                                {/* 우측 씬 내용 영역 */}
+                                <div style={{ flex: 1, padding: '1rem' }}>
+                                    <textarea
+                                        className={styles.textInput}
+                                        style={{
+                                            width: '100%',
+                                            minHeight: '80px',
+                                            border: 'none',
+                                            background: 'transparent',
+                                            padding: '0.5rem',
+                                            resize: 'vertical',
+                                            boxShadow: 'none'
+                                        }}
+                                        value={scene.content}
+                                        onChange={(e) => updateSceneContent(idx, e.target.value)}
+                                        placeholder="이 씬에서 일어날 구체적인 내용을 작성해주세요..."
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

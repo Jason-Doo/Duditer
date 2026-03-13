@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Sparkles, Image as ImageIcon, Check, ChevronRight, ChevronLeft, Palette, Wand2, Upload, Trash2, Search, RotateCcw, Download, Share2 } from 'lucide-react';
 import styles from '../../page.module.css';
 import { supabase } from '@/lib/supabase';
-
+import ModalLayout from '@/components/ModalLayout';
 interface CharacterWizardProps {
     onClose: () => void;
     onComplete: () => void;
@@ -409,237 +409,226 @@ export default function CharacterWizard({ onClose, onComplete, isPage = false }:
         generateInitialAI();
     };
 
-    const content = (
-        <motion.div
-            initial={isPage ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={isPage ? styles.wizardPage : styles.modalContent}
-            style={isPage ? { maxWidth: 'none', borderRadius: 0, background: 'white' } : { maxWidth: '800px', width: '90%' }}
-        >
-            <div className={styles.modalHeader} style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr auto 1fr',
+    const headerLeftContent = !(step === 5 && !!formData.front_view_url) && (
+        <button
+            onClick={async () => {
+                if (step > 1) {
+                    // Back from success step → discard unsaved uploads and return to start
+                    if ((creationMode === 'upload' && step === 4) || (creationMode === 'generate' && step === 8)) {
+                        await cleanupUploads();
+                        resetForm();
+                    } else {
+                        setStep(s => s - 1);
+                    }
+                } else {
+                    // Exit wizard from step 1 → discard any temp uploads
+                    await cleanupUploads();
+                    resetForm();
+                    onClose();
+                }
+            }}
+            style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
                 alignItems: 'center',
-                borderBottom: '1px solid rgba(0,0,0,0.05)',
-                padding: isPage ? '1.2rem var(--page-padding)' : '1.2rem 2.5rem'
-            }}>
-                <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center' }}>
-                    {!(step === 5 && !!formData.front_view_url) && <button
-                        onClick={async () => {
-                            if (step > 1) {
-                                // Back from success step → discard unsaved uploads and return to start
-                                if ((creationMode === 'upload' && step === 4) || (creationMode === 'generate' && step === 8)) {
-                                    await cleanupUploads();
-                                    resetForm();
-                                } else {
-                                    setStep(s => s - 1);
-                                }
-                            } else {
-                                // Exit wizard from step 1 → discard any temp uploads
-                                await cleanupUploads();
-                                resetForm();
-                                onClose();
+                justifyContent: 'center',
+                color: 'var(--text-primary)',
+                padding: '0.5rem',
+                paddingLeft: 0,
+                transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+        >
+            <ChevronLeft size={28} />
+        </button>
+    );
+
+    const headerRightContent = (
+        <>
+            {step === 1 ? (
+                <button
+                    className="gradient-btn"
+                    style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: creationMode ? 1 : 0.4 }}
+                    onClick={() => {
+                        if (!creationMode) return;
+                        if (creationMode === 'generate') {
+                            setFormData(f => ({ ...f, front_view_url: '', side_views: { left: '', right: '', back: '' } }));
+                            setRequiredElements('');
+                            setActiveView('front');
+                            if (uploadedPaths.current.length > 0) {
+                                cleanupUploads();
                             }
-                        }}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--text-primary)',
-                            padding: '0.5rem',
-                            paddingLeft: 0,
-                            transition: 'opacity 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                    >
-                        <ChevronLeft size={28} />
-                    </button>}
-                </div>
+                        } else {
+                            setFormData(f => ({ ...f, personality: [], attitude: [], animal: '', styleReferenceId: '' }));
+                        }
+                        setStep(2);
+                    }}
+                    disabled={!creationMode || loading}
+                >
+                    다음 단계 <ChevronRight size={18} />
+                </button>
+            ) : step === 2 ? (
+                <button
+                    className="gradient-btn"
+                    style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: (formData.name && !nameError && (creationMode !== 'generate' || !!formData.animal)) ? 1 : 0.4 }}
+                    onClick={checkNameDuplicate}
+                    disabled={!formData.name || loading || nameError || (creationMode === 'generate' && !formData.animal)}
+                >
+                    {loading ? '검사 중...' : '다음 단계'} <ChevronRight size={18} />
+                </button>
+            ) : ((creationMode === 'upload' && step === 3) || (creationMode === 'generate' && step === 7)) ? (
+                <button
+                    className="gradient-btn"
+                    style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: formData.front_view_url ? 1 : 0.4 }}
+                    onClick={handleSave}
+                    disabled={loading || !formData.front_view_url}
+                >
+                    {loading ? '저장 중...' : '캐릭터 완성'}
+                </button>
+            ) : (step !== 5 && step !== 8) ? (
+                <button
+                    className="gradient-btn"
+                    style={{
+                        padding: '0.8rem 1.5rem',
+                        fontSize: '1rem',
+                        height: 'auto',
+                        opacity: (
+                            (step === 3 && creationMode === 'generate' && formData.personality.length === 0) ||
+                            (step === 4 && creationMode === 'generate' && formData.attitude.length === 0) ||
+                            (step === 6 && creationMode === 'generate' && !formData.styleReferenceId)
+                        ) ? 0.4 : 1
+                    }}
+                    onClick={() => {
+                        if (creationMode === 'generate' && step === 6) generateInitialAI();
+                        else setStep(s => s + 1);
+                    }}
+                    disabled={
+                        (step === 3 && creationMode === 'generate' && formData.personality.length === 0) ||
+                        (step === 4 && creationMode === 'generate' && formData.attitude.length === 0) ||
+                        (step === 6 && creationMode === 'generate' && !formData.styleReferenceId)
+                    }
+                >
+                    {creationMode === 'generate' && step === 6 ? '생성 시작' : '다음 단계'} <ChevronRight size={18} />
+                </button>
+            ) : null}
+        </>
+    );
 
-                <div style={{ textAlign: 'center' }}>
-                    <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>캐릭터 생성</h2>
-                </div>
-
-                <div style={{ justifySelf: 'end' }}>
-                    {step === 1 ? (
-                        <button
-                            className="gradient-btn"
-                            style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: creationMode ? 1 : 0.4 }}
-                            onClick={() => {
-                                if (!creationMode) return;
-                                if (creationMode === 'generate') {
-                                    // Clear upload-only data
-                                    setFormData(f => ({ ...f, front_view_url: '', side_views: { left: '', right: '', back: '' } }));
-                                    setRequiredElements('');
-                                    setActiveView('front');
-                                    if (uploadedPaths.current.length > 0) {
-                                        cleanupUploads();
-                                    }
-                                } else {
-                                    // Clear generate-only data
-                                    setFormData(f => ({ ...f, personality: [], attitude: [], animal: '', styleReferenceId: '' }));
-                                }
-                                setStep(2);
-                            }}
-                            disabled={!creationMode || loading}
-                        >
-                            다음 단계 <ChevronRight size={18} />
-                        </button>
-                    ) : step === 2 ? (
-                        <button
-                            className="gradient-btn"
-                            style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: (formData.name && !nameError && (creationMode !== 'generate' || !!formData.animal)) ? 1 : 0.4 }}
-                            onClick={checkNameDuplicate}
-                            disabled={!formData.name || loading || nameError || (creationMode === 'generate' && !formData.animal)}
-                        >
-                            {loading ? '검사 중...' : '다음 단계'} <ChevronRight size={18} />
-                        </button>
-                    ) : ((creationMode === 'upload' && step === 3) || (creationMode === 'generate' && step === 7)) ? (
-                        <button
-                            className="gradient-btn"
-                            style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: formData.front_view_url ? 1 : 0.4 }}
-                            onClick={handleSave}
-                            disabled={loading || !formData.front_view_url}
-                        >
-                            {loading ? '저장 중...' : '캐릭터 완성'}
-                        </button>
-                    ) : (step !== 5 && step !== 8) ? (
-                        <button
-                            className="gradient-btn"
-                            style={{
-                                padding: '0.8rem 1.5rem',
-                                fontSize: '1rem',
-                                height: 'auto',
-                                opacity: (
-                                    (step === 3 && creationMode === 'generate' && formData.personality.length === 0) ||
-                                    (step === 4 && creationMode === 'generate' && formData.attitude.length === 0) ||
-                                    (step === 6 && creationMode === 'generate' && !formData.styleReferenceId)
-                                ) ? 0.4 : 1
-                            }}
-                            onClick={() => {
-                                if (creationMode === 'generate' && step === 6) generateInitialAI();
-                                else setStep(s => s + 1);
-                            }}
-                            disabled={
-                                (step === 3 && creationMode === 'generate' && formData.personality.length === 0) ||
-                                (step === 4 && creationMode === 'generate' && formData.attitude.length === 0) ||
-                                (step === 6 && creationMode === 'generate' && !formData.styleReferenceId)
-                            }
-                        >
-                            {creationMode === 'generate' && step === 6 ? '생성 시작' : '다음 단계'} <ChevronRight size={18} />
-                        </button>
-                    ) : null}
-                </div>
-            </div>
-
-            <div className={styles.modalBody} style={{ padding: isPage ? '4rem var(--page-padding)' : '2.5rem', minHeight: '480px' }}>
-                <AnimatePresence mode="wait">
-                    {/* ... Existing steps code remains here ... */}
-                    {/* STEP 1: Branch Choice */}
-                    {step === 1 && (
-                        <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className={styles.modalScroll} style={{ textAlign: 'center' }}>
-                            <h3 className="text-anim">반가워요! 캐릭터를 어떻게 만들까요?</h3>
-                            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>등록과 신규생성 중 선택해주세요!</p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                <div className={`${styles.card} ${creationMode === 'upload' ? 'active-border' : ''}`} onClick={() => setCreationMode('upload')} style={{ padding: '2.5rem', cursor: 'pointer', border: creationMode === 'upload' ? '2px solid var(--accent-primary)' : '1.5px solid var(--border-color)' }}>
-                                    <Upload size={48} color={creationMode === 'upload' ? 'var(--accent-primary)' : 'var(--text-secondary)'} style={{ marginBottom: '1rem' }} />
-                                    <h4 style={{ color: creationMode === 'upload' ? 'var(--accent-primary)' : 'inherit' }}>직접 이미지 등록</h4>
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>이미 소장 중인<br />이미지를 업로드</p>
-                                </div>
-                                <div className={`${styles.card} ${creationMode === 'generate' ? 'active-border' : ''}`} onClick={() => setCreationMode('generate')} style={{ padding: '2.5rem', cursor: 'pointer', border: creationMode === 'generate' ? '2px solid var(--accent-primary)' : '1.5px solid var(--border-color)' }}>
-                                    <Wand2 size={48} color={creationMode === 'generate' ? 'var(--accent-primary)' : 'var(--text-secondary)'} style={{ marginBottom: '1rem' }} />
-                                    <h4 style={{ color: creationMode === 'generate' ? 'var(--accent-primary)' : 'inherit' }}>신규 AI 생성</h4>
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>AI를 통해 새로운<br />캐릭터 창조</p>
-                                </div>
+    const content = (
+        <ModalLayout
+            onClose={onClose}
+            isPage={isPage}
+            title="캐릭터 생성"
+            headerLeft={headerLeftContent}
+            headerRight={headerRightContent}
+            bodyStyle={{ minHeight: '480px' }}
+        >
+            <AnimatePresence mode="wait">
+                {/* ... Existing steps code remains here ... */}
+                {/* STEP 1: Branch Choice */}
+                {step === 1 && (
+                    <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className={styles.modalScroll} style={{ textAlign: 'center' }}>
+                        <h3 className="text-anim">반가워요! 캐릭터를 어떻게 만들까요?</h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>등록과 신규생성 중 선택해주세요!</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                            <div className={`${styles.card} ${creationMode === 'upload' ? 'active-border' : ''}`} onClick={() => setCreationMode('upload')} style={{ padding: '2.5rem', cursor: 'pointer', border: creationMode === 'upload' ? '2px solid var(--accent-primary)' : '1.5px solid var(--border-color)' }}>
+                                <Upload size={48} color={creationMode === 'upload' ? 'var(--accent-primary)' : 'var(--text-secondary)'} style={{ marginBottom: '1rem' }} />
+                                <h4 style={{ color: creationMode === 'upload' ? 'var(--accent-primary)' : 'inherit' }}>직접 이미지 등록</h4>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>이미 소장 중인<br />이미지를 업로드</p>
                             </div>
-                        </motion.div>
-                    )}
+                            <div className={`${styles.card} ${creationMode === 'generate' ? 'active-border' : ''}`} onClick={() => setCreationMode('generate')} style={{ padding: '2.5rem', cursor: 'pointer', border: creationMode === 'generate' ? '2px solid var(--accent-primary)' : '1.5px solid var(--border-color)' }}>
+                                <Wand2 size={48} color={creationMode === 'generate' ? 'var(--accent-primary)' : 'var(--text-secondary)'} style={{ marginBottom: '1rem' }} />
+                                <h4 style={{ color: creationMode === 'generate' ? 'var(--accent-primary)' : 'inherit' }}>신규 AI 생성</h4>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>AI를 통해 새로운<br />캐릭터 창조</p>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
 
-                    {/* STEP 2: Name & Gender */}
-                    {step === 2 && (
-                        <motion.div key="s2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={styles.modalScroll} style={{ textAlign: 'center' }}>
-                            <h3 className="text-anim">
-                                {creationMode === 'upload' ? '등록할 캐릭터의 이름과 성별을 알려주세요!' : '새로운 캐릭터는 이름이 어떻게 되나요?'}
-                            </h3>
-                            <div className={styles.inputGroup} style={{ marginTop: '2rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.75rem' }}>
-                                    <label className={styles.inputLabel} style={{ margin: 0 }}>이름</label>
-                                    {nameError && (
-                                        <span style={{
-                                            background: '#ef4444',
-                                            color: 'white',
-                                            fontSize: '0.75rem',
-                                            padding: '0.2rem 0.6rem',
-                                            borderRadius: '4px',
-                                            fontWeight: 700
-                                        }}>
-                                            해당 이름은 이미 사용중입니다.
-                                        </span>
-                                    )}
-                                </div>
+                {/* STEP 2: Name & Gender */}
+                {step === 2 && (
+                    <motion.div key="s2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={styles.modalScroll} style={{ textAlign: 'center' }}>
+                        <h3 className="text-anim">
+                            {creationMode === 'upload' ? '등록할 캐릭터의 이름과 성별을 알려주세요!' : '새로운 캐릭터는 이름이 어떻게 되나요?'}
+                        </h3>
+                        <div className={styles.inputGroup} style={{ marginTop: '2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.75rem' }}>
+                                <label className={styles.inputLabel} style={{ margin: 0 }}>이름</label>
+                                {nameError && (
+                                    <span style={{
+                                        background: '#ef4444',
+                                        color: 'white',
+                                        fontSize: '0.75rem',
+                                        padding: '0.2rem 0.6rem',
+                                        borderRadius: '4px',
+                                        fontWeight: 700
+                                    }}>
+                                        해당 이름은 이미 사용중입니다.
+                                    </span>
+                                )}
+                            </div>
+                            <input
+                                ref={nameInputRef}
+                                type="text"
+                                className={styles.textInput}
+                                placeholder="이름을 입력하세요"
+                                value={formData.name}
+                                onChange={e => {
+                                    setFormData({ ...formData, name: e.target.value });
+                                    setNameChecked(false);
+                                    setNameError(false);
+                                }}
+                            />
+                        </div>
+                        <div className={styles.inputGroup}>
+                            <label className={styles.inputLabel}>성별</label>
+                            <div className={styles.ratioGrid} style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                                {(['남성', '여성'] as const).map(g => (
+                                    <div
+                                        key={g}
+                                        className={`${styles.ratioOption} ${formData.gender === g ? styles.ratioActive : ''}`}
+                                        onClick={() => setFormData({ ...formData, gender: g })}
+                                    >
+                                        {g}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        {creationMode === 'generate' && (
+                            <div className={styles.inputGroup}>
+                                <label className={styles.inputLabel}>동물 타입</label>
                                 <input
-                                    ref={nameInputRef}
                                     type="text"
                                     className={styles.textInput}
-                                    placeholder="이름을 입력하세요"
-                                    value={formData.name}
-                                    onChange={e => {
-                                        setFormData({ ...formData, name: e.target.value });
-                                        setNameChecked(false);
-                                        setNameError(false);
-                                    }}
+                                    placeholder="예: 고양이, 강아지, 토끼..."
+                                    value={formData.animal}
+                                    onChange={e => setFormData({ ...formData, animal: e.target.value })}
                                 />
+                                <button
+                                    type="button"
+                                    className="gradient-btn"
+                                    onClick={() => {
+                                        const random = ANIMAL_TYPES[Math.floor(Math.random() * ANIMAL_TYPES.length)];
+                                        setFormData({ ...formData, animal: random });
+                                    }}
+                                    style={{ marginTop: '0.5rem', padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', width: '100%' }}
+                                >
+                                    아몰랑 추천해줘!
+                                </button>
                             </div>
-                            <div className={styles.inputGroup}>
-                                <label className={styles.inputLabel}>성별</label>
-                                <div className={styles.ratioGrid} style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-                                    {(['남성', '여성'] as const).map(g => (
-                                        <div
-                                            key={g}
-                                            className={`${styles.ratioOption} ${formData.gender === g ? styles.ratioActive : ''}`}
-                                            onClick={() => setFormData({ ...formData, gender: g })}
-                                        >
-                                            {g}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            {creationMode === 'generate' && (
-                                <div className={styles.inputGroup}>
-                                    <label className={styles.inputLabel}>동물 타입</label>
-                                    <input
-                                        type="text"
-                                        className={styles.textInput}
-                                        placeholder="예: 고양이, 강아지, 토끼..."
-                                        value={formData.animal}
-                                        onChange={e => setFormData({ ...formData, animal: e.target.value })}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="gradient-btn"
-                                        onClick={() => {
-                                            const random = ANIMAL_TYPES[Math.floor(Math.random() * ANIMAL_TYPES.length)];
-                                            setFormData({ ...formData, animal: random });
-                                        }}
-                                        style={{ marginTop: '0.5rem', padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', width: '100%' }}
-                                    >
-                                        아몰랑 추천해줘!
-                                    </button>
-                                </div>
-                            )}
-                        </motion.div>
-                    )}
+                        )}
+                    </motion.div>
+                )}
 
-                    {/* [UPLOAD FLOW] STEP 3: Multi-view */}
-                    {step === 3 && creationMode === 'upload' && (
-                        <motion.div key="upload-s3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
-                            <h3 className="text-anim" style={{ textAlign: 'center' }}>등록할 캐릭터의 정면 모습을 올려주세요!</h3>
+                {/* [UPLOAD FLOW] STEP 3: Multi-view */}
+                {step === 3 && creationMode === 'upload' && (
+                    <motion.div key="upload-s3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
+                        <h3 className="text-anim" style={{ textAlign: 'center' }}>등록할 캐릭터의 정면 모습을 올려주세요!</h3>
 
-                            <style>{`
+                        <style>{`
                                 @media (max-width: 640px) {
                                     .upload-view-grid { flex-direction: column !important; }
                                     .upload-image-box { width: 100% !important; max-width: 100% !important; }
@@ -648,543 +637,505 @@ export default function CharacterWizard({ onClose, onComplete, isPage = false }:
                                 }
                             `}</style>
 
-                            <div className="upload-view-grid" style={{ display: 'flex', flexDirection: 'row', gap: '1.5rem', marginTop: '2.5rem', alignItems: 'stretch' }}>
-                                <div className="upload-image-box card" style={{ flex: '1 1 250px', aspectRatio: '1/1', maxHeight: 'min(600px, 60vh)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', padding: 0, margin: '0 auto' }}>
-                                    {activeView === 'front' && !formData.front_view_url ? (
-                                        <div
-                                            className={`${styles.uploadDropzone} ${isDragging ? styles.dragging : ''}`}
-                                            onDragOver={onDragOver}
-                                            onDrop={onDrop}
-                                            onDragLeave={onDragLeave}
-                                            onClick={() => document.getElementById('fileInput')?.click()}
-                                            style={{ textAlign: 'center', width: '100%', height: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '2px dashed #ddd', borderRadius: '16px', transition: 'all 0.3s ease' }}
-                                        >
-                                            {uploading ? (
-                                                <RotateCcw className="spin" size={40} color="var(--accent-primary)" />
-                                            ) : (
-                                                <>
-                                                    <Upload size={40} color={isDragging ? 'var(--accent-primary)' : '#ddd'} />
-                                                    <p style={{ marginTop: '1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                                                        {isDragging ? '여기에 놓으세요!' : '정면 이미지를 업로드하거나 드래그하세요'}
-                                                    </p>
-                                                    <p style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.5rem' }}>클릭하여 파일 선택</p>
-                                                </>
-                                            )}
-                                            <input
-                                                id="fileInput"
-                                                type="file"
-                                                accept="image/*"
-                                                style={{ display: 'none' }}
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) handleFileUpload(file);
-                                                }}
-                                            />
-                                        </div>
-                                    ) : activeView === 'front' && formData.front_view_url ? (
-                                        <img src={formData.front_view_url} style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer', background: '#f8f9fa' }} onClick={() => window.open(formData.front_view_url)} alt="Character Front View" />
-                                    ) : (
-                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            {genLoadingStates[activeView as keyof typeof genLoadingStates] ? (
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <RotateCcw className="spin" size={32} color="var(--accent-primary)" />
-                                                    <p style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-primary)' }}>생성 중...</p>
-                                                </div>
-                                            ) : (
-                                                formData.side_views[activeView as keyof typeof formData.side_views] ?
-                                                    <img src={formData.side_views[activeView as keyof typeof formData.side_views]} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f8f9fa', cursor: 'pointer' }} onClick={() => window.open(formData.side_views[activeView as keyof typeof formData.side_views])} /> :
-                                                    <div style={{ textAlign: 'center' }}>
-                                                        <ImageIcon size={40} color="#eee" />
-                                                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>생성이 필요합니다</p>
-                                                    </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="upload-side-nav" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignSelf: 'stretch', overflow: 'hidden', width: '100px', flexShrink: 0 }}>
-                                    {(['front', 'left', 'right', 'back'] as const).map(v => {
-                                        const hasImg = v === 'front' ? !!formData.front_view_url : !!formData.side_views[v as keyof typeof formData.side_views];
-                                        const imgUrl = v === 'front' ? formData.front_view_url : formData.side_views[v as keyof typeof formData.side_views];
-                                        const isLoading = v !== 'front' && genLoadingStates[v as keyof typeof genLoadingStates];
-                                        const label = v === 'front' ? '정면' : v === 'left' ? '좌측면' : v === 'right' ? '우측면' : '뒷면';
-
-                                        return (
-                                            <div key={v} style={{ flex: '1 1 0', minHeight: '60px', position: 'relative' }}>
-                                                <button
-                                                    className={`${styles.ratioOption} ${(activeView === v || hasImg) ? styles.ratioActive : ''}`}
-                                                    style={{ width: '100%', height: '100%', padding: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', overflow: 'hidden' }}
-                                                    onClick={() => {
-                                                        if (v === 'front' || hasImg) {
-                                                            setActiveView(v);
-                                                        } else if (!isLoading && formData.front_view_url) {
-                                                            generateSingleView(v as 'left' | 'right' | 'back');
-                                                        }
-                                                    }}
-                                                >
-                                                    {isLoading ? (
-                                                        <RotateCcw size={20} className="spin" />
-                                                    ) : hasImg ? (
-                                                        <img src={imgUrl} style={{ width: '100%', aspectRatio: '1/1', height: 'auto', borderRadius: '4px', objectFit: 'cover' }} />
-                                                    ) : (
-                                                        <ImageIcon size={20} color={formData.front_view_url ? 'var(--accent-primary)' : '#ccc'} />
-                                                    )}
-                                                    <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <span style={{ fontSize: '0.7rem', textAlign: 'center' }}>{label}</span>
-                                                        {hasImg && v !== 'front' && (
-                                                            <span
-                                                                role="button"
-                                                                onClick={e => { e.stopPropagation(); removeSideView(v as 'left' | 'right' | 'back'); }}
-                                                                style={{ position: 'absolute', right: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px' }}
-                                                            >
-                                                                <Trash2 size={14} color="white" />
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div className={styles.inputGroup} style={{ marginTop: '1.5rem' }}>
-                                <label className={styles.inputLabel}>필수 요소</label>
-                                <input
-                                    type="text"
-                                    value={requiredElements}
-                                    onChange={e => setRequiredElements(e.target.value)}
-                                    placeholder="꼭 있어야 하는 요소를 입력해주세요. (예:꼬리, 안경, 머리핀 등...)"
-                                    className={styles.inputField}
-                                    style={{ width: '100%' }}
-                                />
-                            </div>
-                            <button
-                                className="gradient-btn"
-                                style={{ width: '100%', marginTop: '0.75rem', opacity: formData.front_view_url ? 1 : 0.5, pointerEvents: (genLoadingStates.left || genLoadingStates.right || genLoadingStates.back) ? 'none' : 'auto' }}
-                                onClick={generateSideViews}
-                                disabled={!formData.front_view_url}
-                            >
-                                <Sparkles size={16} />
-                                {formData.front_view_url ? (
-                                    genLoadingStates.left || genLoadingStates.right || genLoadingStates.back ? '생성 중...' : '측면 자동 생성'
-                                ) : '정면을 업로드 해주세요.'}
-                            </button>
-                        </motion.div>
-                    )}
-
-                    {/* SUCCESS STEP (REUSED FOR BOTH) */}
-                    {((step === 4 && creationMode === 'upload') || (step === 8 && creationMode === 'generate')) && (
-                        <motion.div key="success" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', padding: '4rem 0' }}>
-                            <div style={{ width: '80px', height: '80px', background: 'var(--accent-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem', color: 'white' }}>
-                                <Check size={40} />
-                            </div>
-                            <h2 className="text-anim">
-                                {creationMode === 'upload' ? '등록 완료!' : '탄생을 축하해요!'}
-                            </h2>
-                            <p style={{ color: 'var(--text-secondary)', marginTop: '1rem', fontSize: '1.1rem' }}>
-                                {creationMode === 'upload' ? '이제 멋진 컨텐츠를 제작해보세요!' : `"${formData.name}"와(과) 함께 멋진 컨텐츠를 만들어보세요!`}
-                            </p>
-                            <div style={{ marginTop: '3rem' }}>
-                                <button className="gradient-btn" onClick={handleFinish} style={{ padding: '1rem 4rem' }}>
-                                    확인
-                                </button>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* [AI GENERATE] STEP 3: Personality */}
-                    {step === 3 && creationMode === 'generate' && (
-                        <motion.div key="gen-s3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
-                            <h3 className="text-anim" style={{ textAlign: 'center' }}>캐릭터의 성격은 어떻게 되나요? (최대 3개)</h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '2rem' }}>
-                                {Object.entries(PERSONALITY_MAP).map(([cat, tags]) => (
-                                    <div key={cat}>
-                                        <p style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--accent-primary)' }}>{cat}</p>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                            {tags.map(t => (
-                                                <button
-                                                    key={t}
-                                                    className={`${styles.tag} ${formData.personality.includes(t) ? styles.tagActive : ''}`}
-                                                    style={{
-                                                        opacity: (!formData.personality.includes(t) && formData.personality.length >= 3) ? 0.35 : 1,
-                                                        cursor: (!formData.personality.includes(t) && formData.personality.length >= 3) ? 'not-allowed' : 'pointer',
-                                                    }}
-                                                    onClick={() => {
-                                                        const exists = formData.personality.includes(t);
-                                                        if (!exists && formData.personality.length >= 3) return;
-                                                        setFormData(f => ({ ...f, personality: exists ? f.personality.filter(i => i !== t) : [...f.personality, t] }));
-                                                    }}
-                                                >
-                                                    {t}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* [AI GENERATE] STEP 4: Attitude */}
-                    {step === 4 && creationMode === 'generate' && (
-                        <motion.div key="gen-s4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
-                            <h3 className="text-anim" style={{ textAlign: 'center' }}>캐릭터의 태도는 어떨까요? (최대 2개)</h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '2rem' }}>
-                                {Object.entries(ATTITUDE_MAP).map(([cat, tags]) => (
-                                    <div key={cat}>
-                                        <p style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--accent-primary)' }}>{cat}</p>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                            {tags.map(t => (
-                                                <button
-                                                    key={t}
-                                                    className={`${styles.tag} ${formData.attitude.includes(t) ? styles.tagActive : ''}`}
-                                                    style={{
-                                                        opacity: (!formData.attitude.includes(t) && formData.attitude.length >= 2) ? 0.35 : 1,
-                                                        cursor: (!formData.attitude.includes(t) && formData.attitude.length >= 2) ? 'not-allowed' : 'pointer',
-                                                    }}
-                                                    onClick={() => {
-                                                        const exists = formData.attitude.includes(t);
-                                                        if (!exists && formData.attitude.length >= 2) return;
-                                                        setFormData(f => ({ ...f, attitude: exists ? f.attitude.filter(i => i !== t) : [...f.attitude, t] }));
-                                                    }}
-                                                >
-                                                    {t}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* [AI GENERATE] STEP 5: Confirmation Summary */}
-                    {step === 5 && creationMode === 'generate' && (
-                        <motion.div key="gen-s5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
-                            <h3 className="text-anim" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                                {formData.front_view_url ? '멋진 캐릭터를 찾았어요!' : '찾으시는 캐릭터가 맞나요?'}
-                            </h3>
-
-                            {/* 동그란 프로필 박스 */}
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
-                                <div style={{
-                                    width: '250px', height: '250px', borderRadius: '50%',
-                                    background: 'var(--surface-secondary, rgba(255,255,255,0.1))',
-                                    border: '2px solid var(--accent-primary)',
-                                    boxShadow: '0 0 0 4px rgba(var(--accent-primary-rgb, 99,102,241), 0.18)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                                }}>
-                                    {formData.front_view_url ? (
-                                        <img
-                                            src={formData.front_view_url}
-                                            alt="generated character"
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', cursor: 'pointer' }}
-                                            onClick={() => setShowPreview(true)}
-                                            title="클릭하여 크게 보기"
-                                        />
-                                    ) : loading ? (
-                                        <AnimatePresence mode="wait">
-                                            <motion.span
-                                                key={loadingMsgIndex}
-                                                initial={{ opacity: 0, y: 20 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -20 }}
-                                                transition={{ duration: 0.4 }}
-                                                style={{ width: '85%', fontSize: '1.6rem', fontWeight: 700, textAlign: 'center', color: 'var(--accent-primary)', lineHeight: 1.4 }}
-                                            >
-                                                {LOADING_MESSAGES[loadingMsgIndex]}
-                                            </motion.span>
-                                        </AnimatePresence>
-                                    ) : (
-                                        <svg width="48" height="74" viewBox="0 0 68 104" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M8.59408 25.8137C10.614 20.0716 14.601 15.2296 19.8489 12.1454C25.0967 9.0612 31.2668 7.93379 37.2662 8.96285C43.2657 9.99192 48.7073 13.1111 52.6274 17.7678C56.5475 22.4246 58.693 28.3184 58.6839 34.4055C58.6839 51.5889 32.9087 60.1807 32.9087 60.1807M33.5974 94.5469H33.6833" stroke="var(--accent-primary)" strokeWidth="17.1835" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    )}
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {[
-                                    { label: '이름', value: formData.name },
-                                    { label: '성별', value: formData.gender },
-                                    { label: '동물 타입', value: formData.animal },
-                                    { label: '성격', value: formData.personality.join(', ') || '-' },
-                                    { label: '태도', value: formData.attitude.join(', ') || '-' },
-                                ].map(({ label, value }) => (
-                                    <div key={label} style={{
-                                        display: 'flex', alignItems: 'stretch', borderRadius: '12px',
-                                        overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.18)'
-                                    }}>
-                                        <div style={{
-                                            background: 'var(--accent-primary)', color: 'white',
-                                            fontWeight: 700, fontSize: '0.8rem', minWidth: '80px',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            padding: '0.75rem 0.5rem', flexShrink: 0, textAlign: 'center'
-                                        }}>
-                                            {label}
-                                        </div>
-                                        <div style={{
-                                            flex: 1, padding: '0.75rem 1rem',
-                                            background: 'var(--surface-secondary, rgba(255,255,255,0.04))',
-                                            fontSize: '0.95rem', display: 'flex', alignItems: 'center'
-                                        }}>
-                                            {value}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* 추가 설명: 생성 전엔 textarea, 생성 후엔 텍스트 */}
-                            <div className={styles.inputGroup} style={{ marginTop: '1.5rem' }}>
-                                <label className={styles.inputLabel}>주가 설명</label>
-                                {formData.front_view_url ? (
-                                    <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', margin: 0, minHeight: '1.2rem' }}>
-                                        {formData.extraDescription || '(없음)'}
-                                    </p>
-                                ) : (
-                                    <textarea
-                                        className={styles.textInput}
-                                        rows={3}
-                                        placeholder="(선택) 추가 설명이 있다면 입력해주세요. (예: 양복을 입어, 불의 속성을 가짐...)"
-                                        value={formData.extraDescription ?? ''}
-                                        onChange={e => setFormData(f => ({ ...f, extraDescription: e.target.value }))}
-                                        disabled={loading}
-                                        style={{ resize: 'vertical', minHeight: '80px' }}
-                                    />
-                                )}
-                            </div>
-
-                            {/* 하단 버튼: 생성 전 → '맞아요!', 생성 후 → '별로예요' + '좋아요!' */}
-                            <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
-                                {formData.front_view_url && (
-                                    <button
-                                        className={styles.outlineBtn}
-                                        style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: loading ? 0.5 : 1 }}
-                                        onClick={retryGeneration}
-                                        disabled={loading}
+                        <div className="upload-view-grid" style={{ display: 'flex', flexDirection: 'row', gap: '1.5rem', marginTop: '2.5rem', alignItems: 'stretch' }}>
+                            <div className="upload-image-box card" style={{ flex: '1 1 250px', aspectRatio: '1/1', maxHeight: 'min(600px, 60vh)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', padding: 0, margin: '0 auto' }}>
+                                {activeView === 'front' && !formData.front_view_url ? (
+                                    <div
+                                        className={`${styles.uploadDropzone} ${isDragging ? styles.dragging : ''}`}
+                                        onDragOver={onDragOver}
+                                        onDrop={onDrop}
+                                        onDragLeave={onDragLeave}
+                                        onClick={() => document.getElementById('fileInput')?.click()}
+                                        style={{ textAlign: 'center', width: '100%', height: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '2px dashed #ddd', borderRadius: '16px', transition: 'all 0.3s ease' }}
                                     >
-                                        별로예요
-                                    </button>
+                                        {uploading ? (
+                                            <RotateCcw className="spin" size={40} color="var(--accent-primary)" />
+                                        ) : (
+                                            <>
+                                                <Upload size={40} color={isDragging ? 'var(--accent-primary)' : '#ddd'} />
+                                                <p style={{ marginTop: '1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                                    {isDragging ? '여기에 놓으세요!' : '정면 이미지를 업로드하거나 드래그하세요'}
+                                                </p>
+                                                <p style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '0.5rem' }}>클릭하여 파일 선택</p>
+                                            </>
+                                        )}
+                                        <input
+                                            id="fileInput"
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) handleFileUpload(file);
+                                            }}
+                                        />
+                                    </div>
+                                ) : activeView === 'front' && formData.front_view_url ? (
+                                    <img src={formData.front_view_url} style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer', background: '#f8f9fa' }} onClick={() => window.open(formData.front_view_url)} alt="Character Front View" />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {genLoadingStates[activeView as keyof typeof genLoadingStates] ? (
+                                            <div style={{ textAlign: 'center' }}>
+                                                <RotateCcw className="spin" size={32} color="var(--accent-primary)" />
+                                                <p style={{ fontSize: '0.8rem', marginTop: '0.5rem', color: 'var(--accent-primary)' }}>생성 중...</p>
+                                            </div>
+                                        ) : (
+                                            formData.side_views[activeView as keyof typeof formData.side_views] ?
+                                                <img src={formData.side_views[activeView as keyof typeof formData.side_views]} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f8f9fa', cursor: 'pointer' }} onClick={() => window.open(formData.side_views[activeView as keyof typeof formData.side_views])} /> :
+                                                <div style={{ textAlign: 'center' }}>
+                                                    <ImageIcon size={40} color="#eee" />
+                                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>생성이 필요합니다</p>
+                                                </div>
+                                        )}
+                                    </div>
                                 )}
+                            </div>
+
+                            <div className="upload-side-nav" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignSelf: 'stretch', overflow: 'hidden', width: '100px', flexShrink: 0 }}>
+                                {(['front', 'left', 'right', 'back'] as const).map(v => {
+                                    const hasImg = v === 'front' ? !!formData.front_view_url : !!formData.side_views[v as keyof typeof formData.side_views];
+                                    const imgUrl = v === 'front' ? formData.front_view_url : formData.side_views[v as keyof typeof formData.side_views];
+                                    const isLoading = v !== 'front' && genLoadingStates[v as keyof typeof genLoadingStates];
+                                    const label = v === 'front' ? '정면' : v === 'left' ? '좌측면' : v === 'right' ? '우측면' : '뒷면';
+
+                                    return (
+                                        <div key={v} style={{ flex: '1 1 0', minHeight: '60px', position: 'relative' }}>
+                                            <button
+                                                className={`${styles.ratioOption} ${(activeView === v || hasImg) ? styles.ratioActive : ''}`}
+                                                style={{ width: '100%', height: '100%', padding: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', overflow: 'hidden' }}
+                                                onClick={() => {
+                                                    if (v === 'front' || hasImg) {
+                                                        setActiveView(v);
+                                                    } else if (!isLoading && formData.front_view_url) {
+                                                        generateSingleView(v as 'left' | 'right' | 'back');
+                                                    }
+                                                }}
+                                            >
+                                                {isLoading ? (
+                                                    <RotateCcw size={20} className="spin" />
+                                                ) : hasImg ? (
+                                                    <img src={imgUrl} style={{ width: '100%', aspectRatio: '1/1', height: 'auto', borderRadius: '4px', objectFit: 'cover' }} />
+                                                ) : (
+                                                    <ImageIcon size={20} color={formData.front_view_url ? 'var(--accent-primary)' : '#ccc'} />
+                                                )}
+                                                <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <span style={{ fontSize: '0.7rem', textAlign: 'center' }}>{label}</span>
+                                                    {hasImg && v !== 'front' && (
+                                                        <span
+                                                            role="button"
+                                                            onClick={e => { e.stopPropagation(); removeSideView(v as 'left' | 'right' | 'back'); }}
+                                                            style={{ position: 'absolute', right: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px' }}
+                                                        >
+                                                            <Trash2 size={14} color="white" />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className={styles.inputGroup} style={{ marginTop: '1.5rem' }}>
+                            <label className={styles.inputLabel}>필수 요소</label>
+                            <input
+                                type="text"
+                                value={requiredElements}
+                                onChange={e => setRequiredElements(e.target.value)}
+                                placeholder="꼭 있어야 하는 요소를 입력해주세요. (예:꼬리, 안경, 머리핀 등...)"
+                                className={styles.inputField}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <button
+                            className="gradient-btn"
+                            style={{ width: '100%', marginTop: '0.75rem', opacity: formData.front_view_url ? 1 : 0.5, pointerEvents: (genLoadingStates.left || genLoadingStates.right || genLoadingStates.back) ? 'none' : 'auto' }}
+                            onClick={generateSideViews}
+                            disabled={!formData.front_view_url}
+                        >
+                            <Sparkles size={16} />
+                            {formData.front_view_url ? (
+                                genLoadingStates.left || genLoadingStates.right || genLoadingStates.back ? '생성 중...' : '측면 자동 생성'
+                            ) : '정면을 업로드 해주세요.'}
+                        </button>
+                    </motion.div>
+                )}
+
+                {/* SUCCESS STEP (REUSED FOR BOTH) */}
+                {((step === 4 && creationMode === 'upload') || (step === 8 && creationMode === 'generate')) && (
+                    <motion.div key="success" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', padding: '4rem 0' }}>
+                        <div style={{ width: '80px', height: '80px', background: 'var(--accent-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem', color: 'white' }}>
+                            <Check size={40} />
+                        </div>
+                        <h2 className="text-anim">
+                            {creationMode === 'upload' ? '등록 완료!' : '탄생을 축하해요!'}
+                        </h2>
+                        <p style={{ color: 'var(--text-secondary)', marginTop: '1rem', fontSize: '1.1rem' }}>
+                            {creationMode === 'upload' ? '이제 멋진 컨텐츠를 제작해보세요!' : `"${formData.name}"와(과) 함께 멋진 컨텐츠를 만들어보세요!`}
+                        </p>
+                        <div style={{ marginTop: '3rem' }}>
+                            <button className="gradient-btn" onClick={handleFinish} style={{ padding: '1rem 4rem' }}>
+                                확인
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* [AI GENERATE] STEP 3: Personality */}
+                {step === 3 && creationMode === 'generate' && (
+                    <motion.div key="gen-s3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
+                        <h3 className="text-anim" style={{ textAlign: 'center' }}>캐릭터의 성격은 어떻게 되나요? (최대 3개)</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '2rem' }}>
+                            {Object.entries(PERSONALITY_MAP).map(([cat, tags]) => (
+                                <div key={cat}>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--accent-primary)' }}>{cat}</p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        {tags.map(t => (
+                                            <button
+                                                key={t}
+                                                className={`${styles.tag} ${formData.personality.includes(t) ? styles.tagActive : ''}`}
+                                                style={{
+                                                    opacity: (!formData.personality.includes(t) && formData.personality.length >= 3) ? 0.35 : 1,
+                                                    cursor: (!formData.personality.includes(t) && formData.personality.length >= 3) ? 'not-allowed' : 'pointer',
+                                                }}
+                                                onClick={() => {
+                                                    const exists = formData.personality.includes(t);
+                                                    if (!exists && formData.personality.length >= 3) return;
+                                                    setFormData(f => ({ ...f, personality: exists ? f.personality.filter(i => i !== t) : [...f.personality, t] }));
+                                                }}
+                                            >
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* [AI GENERATE] STEP 4: Attitude */}
+                {step === 4 && creationMode === 'generate' && (
+                    <motion.div key="gen-s4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
+                        <h3 className="text-anim" style={{ textAlign: 'center' }}>캐릭터의 태도는 어떨까요? (최대 2개)</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '2rem' }}>
+                            {Object.entries(ATTITUDE_MAP).map(([cat, tags]) => (
+                                <div key={cat}>
+                                    <p style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--accent-primary)' }}>{cat}</p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        {tags.map(t => (
+                                            <button
+                                                key={t}
+                                                className={`${styles.tag} ${formData.attitude.includes(t) ? styles.tagActive : ''}`}
+                                                style={{
+                                                    opacity: (!formData.attitude.includes(t) && formData.attitude.length >= 2) ? 0.35 : 1,
+                                                    cursor: (!formData.attitude.includes(t) && formData.attitude.length >= 2) ? 'not-allowed' : 'pointer',
+                                                }}
+                                                onClick={() => {
+                                                    const exists = formData.attitude.includes(t);
+                                                    if (!exists && formData.attitude.length >= 2) return;
+                                                    setFormData(f => ({ ...f, attitude: exists ? f.attitude.filter(i => i !== t) : [...f.attitude, t] }));
+                                                }}
+                                            >
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* [AI GENERATE] STEP 5: Confirmation Summary */}
+                {step === 5 && creationMode === 'generate' && (
+                    <motion.div key="gen-s5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
+                        <h3 className="text-anim" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            {formData.front_view_url ? '멋진 캐릭터를 찾았어요!' : '찾으시는 캐릭터가 맞나요?'}
+                        </h3>
+
+                        {/* 동그란 프로필 박스 */}
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+                            <div style={{
+                                width: '250px', height: '250px', borderRadius: '50%',
+                                background: 'var(--surface-secondary, rgba(255,255,255,0.1))',
+                                border: '2px solid var(--accent-primary)',
+                                boxShadow: '0 0 0 4px rgba(var(--accent-primary-rgb, 99,102,241), 0.18)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                            }}>
+                                {formData.front_view_url ? (
+                                    <img
+                                        src={formData.front_view_url}
+                                        alt="generated character"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', cursor: 'pointer' }}
+                                        onClick={() => setShowPreview(true)}
+                                        title="클릭하여 크게 보기"
+                                    />
+                                ) : loading ? (
+                                    <AnimatePresence mode="wait">
+                                        <motion.span
+                                            key={loadingMsgIndex}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -20 }}
+                                            transition={{ duration: 0.4 }}
+                                            style={{ width: '85%', fontSize: '1.6rem', fontWeight: 700, textAlign: 'center', color: 'var(--accent-primary)', lineHeight: 1.4 }}
+                                        >
+                                            {LOADING_MESSAGES[loadingMsgIndex]}
+                                        </motion.span>
+                                    </AnimatePresence>
+                                ) : (
+                                    <svg width="48" height="74" viewBox="0 0 68 104" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M8.59408 25.8137C10.614 20.0716 14.601 15.2296 19.8489 12.1454C25.0967 9.0612 31.2668 7.93379 37.2662 8.96285C43.2657 9.99192 48.7073 13.1111 52.6274 17.7678C56.5475 22.4246 58.693 28.3184 58.6839 34.4055C58.6839 51.5889 32.9087 60.1807 32.9087 60.1807M33.5974 94.5469H33.6833" stroke="var(--accent-primary)" strokeWidth="17.1835" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                )}
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {[
+                                { label: '이름', value: formData.name },
+                                { label: '성별', value: formData.gender },
+                                { label: '동물 타입', value: formData.animal },
+                                { label: '성격', value: formData.personality.join(', ') || '-' },
+                                { label: '태도', value: formData.attitude.join(', ') || '-' },
+                            ].map(({ label, value }) => (
+                                <div key={label} style={{
+                                    display: 'flex', alignItems: 'stretch', borderRadius: '12px',
+                                    overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.18)'
+                                }}>
+                                    <div style={{
+                                        background: 'var(--accent-primary)', color: 'white',
+                                        fontWeight: 700, fontSize: '0.8rem', minWidth: '80px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        padding: '0.75rem 0.5rem', flexShrink: 0, textAlign: 'center'
+                                    }}>
+                                        {label}
+                                    </div>
+                                    <div style={{
+                                        flex: 1, padding: '0.75rem 1rem',
+                                        background: 'var(--surface-secondary, rgba(255,255,255,0.04))',
+                                        fontSize: '0.95rem', display: 'flex', alignItems: 'center'
+                                    }}>
+                                        {value}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 추가 설명: 생성 전엔 textarea, 생성 후엔 텍스트 */}
+                        <div className={styles.inputGroup} style={{ marginTop: '1.5rem' }}>
+                            <label className={styles.inputLabel}>주가 설명</label>
+                            {formData.front_view_url ? (
+                                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', margin: 0, minHeight: '1.2rem' }}>
+                                    {formData.extraDescription || '(없음)'}
+                                </p>
+                            ) : (
+                                <textarea
+                                    className={styles.textInput}
+                                    rows={3}
+                                    placeholder="(선택) 추가 설명이 있다면 입력해주세요. (예: 양복을 입어, 불의 속성을 가짐...)"
+                                    value={formData.extraDescription ?? ''}
+                                    onChange={e => setFormData(f => ({ ...f, extraDescription: e.target.value }))}
+                                    disabled={loading}
+                                    style={{ resize: 'vertical', minHeight: '80px' }}
+                                />
+                            )}
+                        </div>
+
+                        {/* 하단 버튼: 생성 전 → '맞아요!', 생성 후 → '별로예요' + '좋아요!' */}
+                        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+                            {formData.front_view_url && (
                                 <button
-                                    className="gradient-btn"
-                                    style={{ padding: '0.8rem 2.5rem', fontSize: '1rem', height: 'auto', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                                    onClick={() => {
-                                        if (formData.front_view_url) {
-                                            handleSaveAndComplete();
-                                        } else {
-                                            if (!formData.styleReferenceId) setFormData(f => ({ ...f, styleReferenceId: 'none' }));
-                                            generateInitialAI();
-                                        }
-                                    }}
+                                    className={styles.outlineBtn}
+                                    style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', height: 'auto', opacity: loading ? 0.5 : 1 }}
+                                    onClick={retryGeneration}
                                     disabled={loading}
                                 >
-                                    {loading ? (
-                                        <><RotateCcw size={18} className="spin" /> 생성중...</>
-                                    ) : formData.front_view_url ? (
-                                        '좋아요!'
-                                    ) : (
-                                        '네! 맞아요!'
-                                    )}
+                                    별로예요
                                 </button>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* [AI GENERATE] STEP 6: Style Reference (NEW) */}
-                    {step === 6 && creationMode === 'generate' && (
-                        <motion.div key="gen-s6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
-                            <h3 className="text-anim">마지막으로, 어떤 스타일로 만들까요?</h3>
-                            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>기존 캐릭터의 화풍과 스타일을 그대로 계승할 수 있습니다.</p>
-                            <div className={styles.grid} style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                                {existingCharacters.map(char => (
-                                    <div
-                                        key={char.id}
-                                        className={`${styles.mediaCard} ${formData.styleReferenceId === char.id ? 'active-border' : ''}`}
-                                        onClick={() => setFormData({ ...formData, styleReferenceId: char.id })}
-                                        style={{ height: '180px', cursor: 'pointer', border: formData.styleReferenceId === char.id ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)' }}
-                                    >
-                                        <img src={char.front_view_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`${char.name} style`} />
-                                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0.5rem', background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: '0.7rem' }}>
-                                            {char.name} 스타일
-                                        </div>
-                                    </div>
-                                ))}
-                                <div
-                                    className={`${styles.mediaCard} ${formData.styleReferenceId === 'none' ? 'active-border' : ''}`}
-                                    onClick={() => setFormData({ ...formData, styleReferenceId: 'none' })}
-                                    style={{ height: '180px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: formData.styleReferenceId === 'none' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)' }}
-                                >
-                                    <Sparkles size={24} color="var(--accent-primary)" />
-                                    <span style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>완전한 신규 스타일</span>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* [AI GENERATE] STEP 7: AI Result & Multi-view */}
-                    {step === 7 && creationMode === 'generate' && (
-                        <motion.div key="gen-s7" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
-                            <h3 className="text-anim" style={{ textAlign: 'center' }}>탄생을 축하해요! 이제 측면도 생성할 수 있어요!</h3>
-
-                            <div className="upload-view-grid" style={{ display: 'flex', flexDirection: 'row', gap: '1.5rem', marginTop: '2.5rem', alignItems: 'start' }}>
-                                <div className="upload-image-box card" style={{ flex: '1 1 250px', aspectRatio: '1/1', maxHeight: 'min(600px, 60vh)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 0, margin: '0 auto' }}>
-                                    {activeView === 'front' ? (
-                                        <img src={formData.front_view_url} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f8f9fa' }} alt="Generated Front View" />
-                                    ) : (
-                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            {genLoadingStates[activeView as keyof typeof genLoadingStates] ? (
-                                                <RotateCcw className="spin" size={32} color="var(--accent-primary)" />
-                                            ) : (
-                                                formData.side_views[activeView as keyof typeof formData.side_views] ?
-                                                    <img src={formData.side_views[activeView as keyof typeof formData.side_views]} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f8f9fa' }} alt={`${activeView} View`} /> :
-                                                    <p style={{ color: '#ccc', fontSize: '0.9rem' }}>이미지 없음</p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="upload-side-nav" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignSelf: 'stretch', overflow: 'hidden', width: '100px', flexShrink: 0 }}>
-                                    {(['front', 'left', 'right', 'back'] as const).map(v => {
-                                        const hasImg = v === 'front' ? !!formData.front_view_url : !!formData.side_views[v as keyof typeof formData.side_views];
-                                        const imgUrl = v === 'front' ? formData.front_view_url : formData.side_views[v as keyof typeof formData.side_views];
-                                        const isLoading = v !== 'front' && genLoadingStates[v as keyof typeof genLoadingStates];
-                                        const label = v === 'front' ? '정면' : v === 'left' ? '좌측면' : v === 'right' ? '우측면' : '뒷면';
-
-                                        return (
-                                            <div key={v} style={{ flex: '1 1 0', minHeight: '60px', position: 'relative' }}>
-                                                <button
-                                                    className={`${styles.ratioOption} ${(activeView === v || hasImg) ? styles.ratioActive : ''}`}
-                                                    style={{ width: '100%', height: '100%', padding: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', overflow: 'hidden' }}
-                                                    onClick={() => {
-                                                        if (v === 'front' || hasImg) {
-                                                            setActiveView(v);
-                                                        } else if (!isLoading && formData.front_view_url) {
-                                                            generateSingleView(v as 'left' | 'right' | 'back');
-                                                        }
-                                                    }}
-                                                >
-                                                    {isLoading ? (
-                                                        <RotateCcw size={20} className="spin" />
-                                                    ) : hasImg ? (
-                                                        <img src={imgUrl} style={{ width: '100%', aspectRatio: '1/1', height: 'auto', borderRadius: '4px', objectFit: 'cover' }} alt={`${label} Thumbnail`} />
-                                                    ) : (
-                                                        <ImageIcon size={20} color={formData.front_view_url ? 'var(--accent-primary)' : '#ccc'} />
-                                                    )}
-                                                    <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <span style={{ fontSize: '0.7rem', textAlign: 'center' }}>{label}</span>
-                                                        {hasImg && v !== 'front' && (
-                                                            <span
-                                                                role="button"
-                                                                onClick={e => { e.stopPropagation(); removeSideView(v as 'left' | 'right' | 'back'); }}
-                                                                style={{ position: 'absolute', right: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px' }}
-                                                            >
-                                                                <Trash2 size={14} color="white" />
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div className={styles.inputGroup} style={{ marginTop: '1.5rem' }}>
-                                <label className={styles.inputLabel}>필수 요소</label>
-                                <input
-                                    type="text"
-                                    value={requiredElements}
-                                    onChange={e => setRequiredElements(e.target.value)}
-                                    placeholder="꼭 있어야 하는 요소를 입력해주세요. (예:꼬리, 안경, 머리핀 등...)"
-                                    className={styles.inputField}
-                                    style={{ width: '100%' }}
-                                />
-                            </div>
+                            )}
                             <button
                                 className="gradient-btn"
-                                style={{ width: '100%', marginTop: '0.75rem', opacity: formData.front_view_url ? 1 : 0.5, pointerEvents: (genLoadingStates.left || genLoadingStates.right || genLoadingStates.back) ? 'none' : 'auto' }}
-                                onClick={generateSideViews}
-                                disabled={!formData.front_view_url}
+                                style={{ padding: '0.8rem 2.5rem', fontSize: '1rem', height: 'auto', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                onClick={() => {
+                                    if (formData.front_view_url) {
+                                        handleSaveAndComplete();
+                                    } else {
+                                        if (!formData.styleReferenceId) setFormData(f => ({ ...f, styleReferenceId: 'none' }));
+                                        generateInitialAI();
+                                    }
+                                }}
+                                disabled={loading}
                             >
-                                <Sparkles size={16} />
-                                {formData.front_view_url ? (
-                                    genLoadingStates.left || genLoadingStates.right || genLoadingStates.back ? '생성 중...' : '측면 자동 생성'
-                                ) : '정면을 업로드 해주세요.'}
+                                {loading ? (
+                                    <><RotateCcw size={18} className="spin" /> 생성중...</>
+                                ) : formData.front_view_url ? (
+                                    '좋아요!'
+                                ) : (
+                                    '네! 맞아요!'
+                                )}
                             </button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-        </motion.div >
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* [AI GENERATE] STEP 6: Style Reference (NEW) */}
+                {step === 6 && creationMode === 'generate' && (
+                    <motion.div key="gen-s6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
+                        <h3 className="text-anim">마지막으로, 어떤 스타일로 만들까요?</h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>기존 캐릭터의 화풍과 스타일을 그대로 계승할 수 있습니다.</p>
+                        <div className={styles.grid} style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                            {existingCharacters.map(char => (
+                                <div
+                                    key={char.id}
+                                    className={`${styles.mediaCard} ${formData.styleReferenceId === char.id ? 'active-border' : ''}`}
+                                    onClick={() => setFormData({ ...formData, styleReferenceId: char.id })}
+                                    style={{ height: '180px', cursor: 'pointer', border: formData.styleReferenceId === char.id ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)' }}
+                                >
+                                    <img src={char.front_view_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`${char.name} style`} />
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0.5rem', background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: '0.7rem' }}>
+                                        {char.name} 스타일
+                                    </div>
+                                </div>
+                            ))}
+                            <div
+                                className={`${styles.mediaCard} ${formData.styleReferenceId === 'none' ? 'active-border' : ''}`}
+                                onClick={() => setFormData({ ...formData, styleReferenceId: 'none' })}
+                                style={{ height: '180px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: formData.styleReferenceId === 'none' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)' }}
+                            >
+                                <Sparkles size={24} color="var(--accent-primary)" />
+                                <span style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>완전한 신규 스타일</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* [AI GENERATE] STEP 7: AI Result & Multi-view */}
+                {step === 7 && creationMode === 'generate' && (
+                    <motion.div key="gen-s7" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.modalScroll}>
+                        <h3 className="text-anim" style={{ textAlign: 'center' }}>탄생을 축하해요! 이제 측면도 생성할 수 있어요!</h3>
+
+                        <div className="upload-view-grid" style={{ display: 'flex', flexDirection: 'row', gap: '1.5rem', marginTop: '2.5rem', alignItems: 'start' }}>
+                            <div className="upload-image-box card" style={{ flex: '1 1 250px', aspectRatio: '1/1', maxHeight: 'min(600px, 60vh)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 0, margin: '0 auto' }}>
+                                {activeView === 'front' ? (
+                                    <img src={formData.front_view_url} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f8f9fa' }} alt="Generated Front View" />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {genLoadingStates[activeView as keyof typeof genLoadingStates] ? (
+                                            <RotateCcw className="spin" size={32} color="var(--accent-primary)" />
+                                        ) : (
+                                            formData.side_views[activeView as keyof typeof formData.side_views] ?
+                                                <img src={formData.side_views[activeView as keyof typeof formData.side_views]} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#f8f9fa' }} alt={`${activeView} View`} /> :
+                                                <p style={{ color: '#ccc', fontSize: '0.9rem' }}>이미지 없음</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="upload-side-nav" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignSelf: 'stretch', overflow: 'hidden', width: '100px', flexShrink: 0 }}>
+                                {(['front', 'left', 'right', 'back'] as const).map(v => {
+                                    const hasImg = v === 'front' ? !!formData.front_view_url : !!formData.side_views[v as keyof typeof formData.side_views];
+                                    const imgUrl = v === 'front' ? formData.front_view_url : formData.side_views[v as keyof typeof formData.side_views];
+                                    const isLoading = v !== 'front' && genLoadingStates[v as keyof typeof genLoadingStates];
+                                    const label = v === 'front' ? '정면' : v === 'left' ? '좌측면' : v === 'right' ? '우측면' : '뒷면';
+
+                                    return (
+                                        <div key={v} style={{ flex: '1 1 0', minHeight: '60px', position: 'relative' }}>
+                                            <button
+                                                className={`${styles.ratioOption} ${(activeView === v || hasImg) ? styles.ratioActive : ''}`}
+                                                style={{ width: '100%', height: '100%', padding: '0.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', overflow: 'hidden' }}
+                                                onClick={() => {
+                                                    if (v === 'front' || hasImg) {
+                                                        setActiveView(v);
+                                                    } else if (!isLoading && formData.front_view_url) {
+                                                        generateSingleView(v as 'left' | 'right' | 'back');
+                                                    }
+                                                }}
+                                            >
+                                                {isLoading ? (
+                                                    <RotateCcw size={20} className="spin" />
+                                                ) : hasImg ? (
+                                                    <img src={imgUrl} style={{ width: '100%', aspectRatio: '1/1', height: 'auto', borderRadius: '4px', objectFit: 'cover' }} alt={`${label} Thumbnail`} />
+                                                ) : (
+                                                    <ImageIcon size={20} color={formData.front_view_url ? 'var(--accent-primary)' : '#ccc'} />
+                                                )}
+                                                <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <span style={{ fontSize: '0.7rem', textAlign: 'center' }}>{label}</span>
+                                                    {hasImg && v !== 'front' && (
+                                                        <span
+                                                            role="button"
+                                                            onClick={e => { e.stopPropagation(); removeSideView(v as 'left' | 'right' | 'back'); }}
+                                                            style={{ position: 'absolute', right: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px' }}
+                                                        >
+                                                            <Trash2 size={14} color="white" />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className={styles.inputGroup} style={{ marginTop: '1.5rem' }}>
+                            <label className={styles.inputLabel}>필수 요소</label>
+                            <input
+                                type="text"
+                                value={requiredElements}
+                                onChange={e => setRequiredElements(e.target.value)}
+                                placeholder="꼭 있어야 하는 요소를 입력해주세요. (예:꼬리, 안경, 머리핀 등...)"
+                                className={styles.inputField}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <button
+                            className="gradient-btn"
+                            style={{ width: '100%', marginTop: '0.75rem', opacity: formData.front_view_url ? 1 : 0.5, pointerEvents: (genLoadingStates.left || genLoadingStates.right || genLoadingStates.back) ? 'none' : 'auto' }}
+                            onClick={generateSideViews}
+                            disabled={!formData.front_view_url}
+                        >
+                            <Sparkles size={16} />
+                            {formData.front_view_url ? (
+                                genLoadingStates.left || genLoadingStates.right || genLoadingStates.back ? '생성 중...' : '측면 자동 생성'
+                            ) : '정면을 업로드 해주세요.'}
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </ModalLayout>
     );
 
     return (
         <>
-            {isPage ? content : <div className={styles.modalOverlay}>{content}</div>}
+            {content}
 
             {/* 생성된 캐릭터 미리보기 — LibraryDetail 동일 디자인 */}
             <AnimatePresence>
                 {showPreview && formData.front_view_url && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'white', display: 'flex', flexDirection: 'column' }}
-                        onClick={() => setShowPreview(false)}
-                    >
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            style={{ display: 'flex', flexDirection: 'column', flex: 1, width: '100%', height: '100%' }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* 헤더: 돌아가기 버튼만 */}
-                            <div className={styles.modalHeader} style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-secondary)', borderBottom: '1.5px solid rgba(0,0,0,0.05)', display: 'grid', gridTemplateColumns: '80px 1fr 80px', alignItems: 'center', height: '80px', padding: '0 1.5rem' }}>
-                                <div style={{ justifySelf: 'start' }}>
-                                    <button
-                                        onClick={() => setShowPreview(false)}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', padding: '0.5rem', paddingLeft: 0, transition: 'opacity 0.2s' }}
-                                        onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
-                                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                                    >
-                                        <ChevronLeft size={28} />
-                                    </button>
-                                </div>
-                                <div />
-                                <div />
-                            </div>
-
-                            {/* 바디: 이미지 */}
-                            <div className={styles.modalBody} style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '2rem', overflowY: 'auto' }}>
-                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', minHeight: '400px' }}>
-                                    <motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        transition={{ delay: 0.2 }}
-                                        style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        <img
-                                            src={formData.front_view_url}
-                                            alt="generated character"
-                                            style={{ width: '100%', objectFit: 'contain' }}
-                                        />
-                                    </motion.div>
-                                </div>
-                            </div>
-
-                            {/* 하단 액션 바 */}
-                            <div style={{ padding: '1.5rem 2rem', display: 'flex', justifyContent: 'center', gap: '1.5rem', borderTop: '1px solid rgba(0,0,0,0.05)', background: 'var(--bg-secondary)' }}>
+                    <ModalLayout
+                        isPage={true}
+                        onClose={() => setShowPreview(false)}
+                        headerLeft={
+                            <button
+                                onClick={() => setShowPreview(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', padding: '0.5rem', paddingLeft: 0, transition: 'opacity 0.2s' }}
+                                onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+                                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                            >
+                                <ChevronLeft size={28} />
+                            </button>
+                        }
+                        footer={
+                            <>
                                 <button
                                     onClick={() => {
                                         try {
-                                            // URL에서 확장자 추출
                                             const urlPath = formData.front_view_url.split('?')[0];
                                             const rawExt = urlPath.split('.').pop() || 'png';
                                             const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
                                             const filename = `character_${Date.now()}.${ext}`;
-                                            // 서버사이드 프록시로 다운로드 (CORS·파일명 문제 없음)
                                             const a = document.createElement('a');
                                             a.href = `/api/download?url=${encodeURIComponent(formData.front_view_url)}&filename=${encodeURIComponent(filename)}`;
                                             a.download = filename;
@@ -1219,8 +1170,23 @@ export default function CharacterWizard({ onClose, onComplete, isPage = false }:
                                     <Share2 size={20} color="var(--accent-pink)" strokeWidth={2.5} />
                                     공유하기
                                 </button>
-                            </div>
-                        </motion.div>
+                            </>
+                        }
+                    >
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', minHeight: '400px' }}>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.2 }}
+                                style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <img
+                                    src={formData.front_view_url}
+                                    alt="generated character"
+                                    style={{ width: '100%', objectFit: 'contain' }}
+                                />
+                            </motion.div>
+                        </div>
 
                         {/* 토스트 메시지 */}
                         <AnimatePresence>
@@ -1235,7 +1201,7 @@ export default function CharacterWizard({ onClose, onComplete, isPage = false }:
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                    </motion.div>
+                    </ModalLayout>
                 )}
             </AnimatePresence>
         </>

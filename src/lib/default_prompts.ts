@@ -15,11 +15,11 @@ export const DEFAULT_PROMPTS = {
 
     fitting_system_prompt: '업로드한 이미지들을 참조해서 <이미지1>의 복장을 <이미지2>의 패션(<복장설명>)으로 변경해줘. 배경은 흰색으로 처리해줘. <제외옵션>',
 
-    scenario_idea_prompt: "You are a creative story consultant. Given the user's genre and theme, generate 3 distinct, compelling story ideas with a one-line title and a 2-sentence synopsis each. Be concise and inspiring.",
+    scenario_random_subject_prompt: "You are a creative brainstorming assistant. Please randomly select ONE unique and interesting theme or subject that could be used for a short video or animation. Provide ONLY the final subject in Korean, without any additional text or formatting. Example output: '우주 정거장에서의 평화로운 하루'",
 
-    scenario_create_prompt: 'You are a professional screenwriter. Based on the provided story idea and characters, write a structured 3-act scenario with clear setup, conflict, and resolution. Include scene descriptions and key dialogue moments.',
+    scenario_write_prompt: "You are a professional screenwriter. Based on the following subject: '<주제>', write a structured scenario. Include a clear introduction (도입), body (전개), and conclusion (결말). Make it compelling and concise. Provide the output in Korean.",
 
-    scene_create_prompt: 'Generate a cinematic, high-quality scene image based on the following description. The image should reflect the mood, lighting, and setting described. Aspect ratio 16:9.',
+    scenario_scene_generate_prompt: "You are an expert storyboard artist. Based on the subject: '<주제>' and the scenario description: '<시나리오설명>', generate <생성할씬수> distinct scenes. Each scene should represent a 5-second segment. Describe exactly what happens visually in each scene. Provide the output in Korean.",
 
     video_create_prompt: 'Generate a smooth, cinematic video clip based on the scene description. The motion should be natural, the camera movement subtle (slight pan or zoom). Duration: 4-6 seconds. Maintain consistent art style throughout.',
 } as const;
